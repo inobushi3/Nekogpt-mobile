@@ -9,6 +9,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "relay:dev": "wrangler dev --config wrangler.jsonc",
     "relay:deploy": "wrangler deploy --config wrangler.jsonc",
+    "test:mobile-vad": "node scripts/test-mobile-vad.mjs",
     "test:fake-desktop": "node scripts/fake-desktop.mjs"
   },
   "dependencies": {

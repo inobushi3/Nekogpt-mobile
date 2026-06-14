@@ -4,6 +4,14 @@ import { ConnectionGate } from './components/ConnectionGate';
 import { Live2DStage } from './components/Live2DStage';
 import { type AppLanguage, getSavedLanguage, saveLanguage, t } from './i18n';
 import { DEFAULT_RELAY_URL, getSavedConnectionConfig, NekoConnection } from './lib/connection';
+import {
+  createMobileVadState,
+  hasUsefulMobileSpeech,
+  MOBILE_MIC_MAX_RECORDING_MS,
+  MOBILE_MIC_TTS_COOLDOWN_MS,
+  resetMobileVadState,
+  updateMobileVad,
+} from './lib/mobileVad';
 import type {
   CompanionChatHistory,
   CompanionTtsAudio,
@@ -38,13 +46,6 @@ const MOBILE_VISION_FRAME_MAX_DIMENSION = 1280;
 const SILENT_MOBILE_UNLOCK_AUDIO_URL = 'data:audio/wav;base64,UklGRgQCAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YeABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 const SUPPORTED_MOBILE_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 const SUPPORTED_MOBILE_VIDEO_MIME_TYPES = new Set(['video/webm', 'video/mp4', 'video/mpeg', 'video/quicktime', 'video/mov']);
-const MOBILE_MIC_SPEECH_LEVEL = 0.032;
-const MOBILE_MIC_SPEECH_CONFIRM_MS = 180;
-const MOBILE_MIC_SILENCE_AFTER_SPEECH_MS = 1100;
-const MOBILE_MIC_MIN_UTTERANCE_MS = 420;
-const MOBILE_MIC_TTS_COOLDOWN_MS = 420;
-const MOBILE_MIC_MAX_RECORDING_MS = 30_000;
-
 type BrowserAudioContext = typeof AudioContext;
 
 type MobileTtsPlaybackItem = {
@@ -973,35 +974,6 @@ function base64ToBlob(data: string, mimeType: string) {
   return new Blob([bytes], { type: mimeType });
 }
 
-function hasUsefulMobileSpeech(samples: Float32Array, sampleRate: number) {
-  if (!samples.length || !sampleRate) return true;
-  const durationMs = (samples.length / sampleRate) * 1000;
-  if (durationMs < MOBILE_MIC_MIN_UTTERANCE_MS) return false;
-
-  const windowSize = Math.max(256, Math.floor(sampleRate * 0.08));
-  const step = Math.max(128, Math.floor(windowSize / 2));
-  let peak = 0;
-  let bestWindowRms = 0;
-  let activeWindows = 0;
-
-  for (let offset = 0; offset < samples.length; offset += step) {
-    const end = Math.min(samples.length, offset + windowSize);
-    let sum = 0;
-    let localPeak = 0;
-    for (let index = offset; index < end; index += 1) {
-      const sample = Math.abs(samples[index] || 0);
-      localPeak = Math.max(localPeak, sample);
-      sum += sample * sample;
-    }
-    const rms = Math.sqrt(sum / Math.max(1, end - offset));
-    peak = Math.max(peak, localPeak);
-    bestWindowRms = Math.max(bestWindowRms, rms);
-    if (rms >= 0.01 || localPeak >= 0.06) activeWindows += 1;
-  }
-
-  return peak >= 0.045 && bestWindowRms >= 0.01 && activeWindows >= 1;
-}
-
 type ChatMessageViewProps = {
   message: MobileChatMessage;
   assistantName: string;
@@ -1164,11 +1136,7 @@ export default function App() {
   const voiceCycleTimerRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const silenceFrameRef = useRef<number | null>(null);
-  const speechDetectedRef = useRef(false);
-  const silenceStartedAtRef = useRef(0);
-  const recordingStartedAtRef = useRef(0);
-  const speechCandidateStartedAtRef = useRef(0);
-  const micNoiseFloorRef = useRef(0.012);
+  const mobileVadRef = useRef(createMobileVadState());
   const speechTimerRef = useRef<number | null>(null);
   const mobileTtsActiveRef = useRef(false);
   const suspendMicForTtsRef = useRef(false);
@@ -1725,16 +1693,13 @@ export default function App() {
     pcmSilentGainRef.current = null;
     void audioContextRef.current?.close().catch(() => undefined);
     audioContextRef.current = null;
-    speechDetectedRef.current = false;
-    silenceStartedAtRef.current = 0;
-    speechCandidateStartedAtRef.current = 0;
-    micNoiseFloorRef.current = 0.012;
+    resetMobileVadState(mobileVadRef.current, 0);
   }
 
   function startSilenceDetection(stream: MediaStream) {
     const AudioContextClass = getBrowserAudioContextClass();
     voiceCycleTimerRef.current = window.setTimeout(() => {
-      stopRecording(!speechDetectedRef.current);
+      stopRecording(!mobileVadRef.current.speechDetected);
     }, MOBILE_MIC_MAX_RECORDING_MS);
     if (!AudioContextClass) return;
     const context = new AudioContextClass();
@@ -1765,9 +1730,7 @@ export default function App() {
     pcmSilentGainRef.current = silentGain;
     pcmSampleRateRef.current = context.sampleRate;
     void context.resume().catch(() => undefined);
-    recordingStartedAtRef.current = performance.now();
-    speechCandidateStartedAtRef.current = 0;
-    micNoiseFloorRef.current = 0.012;
+    resetMobileVadState(mobileVadRef.current, performance.now());
 
     const analyze = () => {
       const recorder = recorderRef.current;
@@ -1780,32 +1743,9 @@ export default function App() {
       }
       const level = Math.sqrt(energy / samples.length);
       const now = performance.now();
-      const inTtsCooldown = now - lastTtsPlaybackEndedAtRef.current < MOBILE_MIC_TTS_COOLDOWN_MS;
-      if (!speechDetectedRef.current && !speechCandidateStartedAtRef.current && !inTtsCooldown && level < 0.055) {
-        micNoiseFloorRef.current = micNoiseFloorRef.current * 0.96 + level * 0.04;
-      }
-      const speechLevel = Math.max(
-        MOBILE_MIC_SPEECH_LEVEL,
-        Math.min(0.048, micNoiseFloorRef.current * 2.2 + 0.012),
-      );
-      if (!inTtsCooldown && level >= speechLevel) {
-        if (!speechCandidateStartedAtRef.current) speechCandidateStartedAtRef.current = now;
-        if (now - speechCandidateStartedAtRef.current >= MOBILE_MIC_SPEECH_CONFIRM_MS) {
-          speechDetectedRef.current = true;
-          silenceStartedAtRef.current = 0;
-        }
-      } else if (speechDetectedRef.current) {
-        speechCandidateStartedAtRef.current = 0;
-        if (!silenceStartedAtRef.current) silenceStartedAtRef.current = now;
-        if (now - silenceStartedAtRef.current >= MOBILE_MIC_SILENCE_AFTER_SPEECH_MS) {
-          stopRecording(false);
-          return;
-        }
-      } else {
-        speechCandidateStartedAtRef.current = 0;
-      }
-      if (now - recordingStartedAtRef.current >= MOBILE_MIC_MAX_RECORDING_MS) {
-        stopRecording(!speechDetectedRef.current);
+      const decision = updateMobileVad(mobileVadRef.current, level, now, lastTtsPlaybackEndedAtRef.current);
+      if (decision.shouldStop) {
+        stopRecording(decision.discard);
         return;
       }
       silenceFrameRef.current = window.requestAnimationFrame(analyze);
@@ -1861,7 +1801,7 @@ export default function App() {
           audio: {
             echoCancellation: { ideal: true },
             noiseSuppression: { ideal: true },
-            autoGainControl: { ideal: false },
+            autoGainControl: { ideal: true },
             channelCount: { ideal: 1 },
           },
         });
