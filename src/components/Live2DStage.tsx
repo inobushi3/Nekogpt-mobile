@@ -45,6 +45,7 @@ const PARAMETER_IDS = {
 const MIN_STAGE_ZOOM = 0.3;
 const MAX_STAGE_ZOOM = 18;
 const LIVE2D_FORCE_PRIORITY = 3;
+const LIVE2D_MAX_FPS = 60;
 
 const LIVE2D_EMOTION_CANDIDATES: Record<string, string[]> = {
   neutral: ['neutral', 'normal', 'idle', 'default'],
@@ -597,6 +598,14 @@ export function Live2DStage({
           resolution: Math.min(window.devicePixelRatio || 1, 2),
           powerPreference: 'high-performance',
         });
+        if (app.ticker) {
+          app.ticker.maxFPS = LIVE2D_MAX_FPS;
+          app.ticker.minFPS = Math.min(app.ticker.minFPS || 30, LIVE2D_MAX_FPS);
+          app.ticker.start?.();
+        }
+        if (PIXI.Ticker?.shared) {
+          PIXI.Ticker.shared.maxFPS = LIVE2D_MAX_FPS;
+        }
         const model = await engine.Live2DModel.from(loadedBundle.modelUrl, {
           autoUpdate: true,
           autoFocus: false,

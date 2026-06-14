@@ -27,6 +27,8 @@ type PendingTransfer = {
 const RPC_TIMEOUT_MS = 90_000;
 const BUNDLE_TIMEOUT_MS = 120_000;
 const PAIRING_TIMEOUT_MS = 15_000;
+const RECONNECT_BASE_DELAY_MS = 900;
+const RECONNECT_MAX_DELAY_MS = 8_000;
 export const DEFAULT_RELAY_URL = import.meta.env.VITE_NEKOGPT_RELAY_URL || 'ws://127.0.0.1:8787/connect';
 const SAVED_RELAY_URL_KEY = 'nekogpt:relay-url';
 const SAVED_PAIRING_CODE_KEY = 'nekogpt:pairing-code';
@@ -99,7 +101,13 @@ export class NekoConnection {
   private pendingTransfers = new Map<string, PendingTransfer>();
   private approved = false;
   private pairingCode = '';
+  private relayUrl = '';
   private pairingTimer: number | null = null;
+  private reconnectTimer: number | null = null;
+  private reconnectAttempts = 0;
+  private reconnecting = false;
+  private manualDisconnect = false;
+  private reconnectOnNextClose = false;
 
   get connected() {
     return this.socket?.readyState === WebSocket.OPEN && this.approved;
@@ -129,28 +137,61 @@ export class NekoConnection {
     this.pairingTimer = null;
   }
 
+  private clearReconnectTimer() {
+    if (this.reconnectTimer === null) return;
+    window.clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+  }
+
+  private canReconnect() {
+    return !this.manualDisconnect && Boolean(this.relayUrl && this.pairingCode);
+  }
+
+  private scheduleReconnect() {
+    if (!this.canReconnect()) {
+      this.reconnecting = false;
+      this.emitPhase('disconnected', copy('connection.error.desktopOffline'));
+      return;
+    }
+    if (this.reconnectTimer !== null) return;
+    this.reconnecting = true;
+    const delay = Math.min(
+      RECONNECT_MAX_DELAY_MS,
+      Math.round(RECONNECT_BASE_DELAY_MS * (1.55 ** Math.min(this.reconnectAttempts, 6))),
+    );
+    this.reconnectAttempts += 1;
+    this.emitPhase('connected', copy('connection.error.desktopOffline'));
+    this.reconnectTimer = window.setTimeout(() => {
+      this.reconnectTimer = null;
+      if (!this.canReconnect()) return;
+      this.openSocket();
+    }, delay);
+  }
+
   private startPairingTimer(socket: WebSocket) {
     this.clearPairingTimer();
     this.pairingTimer = window.setTimeout(() => {
       if (this.socket !== socket || this.approved) return;
       this.clearPairingTimer();
-      this.socket = null;
-      this.approved = false;
       this.rejectPending(new Error(copy('connection.error.desktopOffline')));
-      this.emitPhase('error', copy('connection.error.desktopOffline'));
+      if (!this.reconnecting) this.emitPhase('error', copy('connection.error.desktopOffline'));
       socket.close(4004, 'desktop did not approve connection');
     }, PAIRING_TIMEOUT_MS);
   }
 
   connect(relayUrl: string, pairingCode: string) {
-    this.disconnect();
+    this.disconnect(false);
     this.clearPairingTimer();
+    this.clearReconnectTimer();
+    this.manualDisconnect = false;
+    this.reconnecting = false;
+    this.reconnectOnNextClose = false;
+    this.reconnectAttempts = 0;
     this.approved = false;
     this.pairingCode = normalizePairingCode(pairingCode);
-    let socketUrl = '';
     try {
       const cleanedRelayUrl = cleanRelayUrl(relayUrl);
-      socketUrl = buildSocketUrl(cleanedRelayUrl, this.pairingCode);
+      this.relayUrl = cleanedRelayUrl;
       localStorage.setItem(SAVED_RELAY_URL_KEY, cleanedRelayUrl);
     } catch (error) {
       this.emitPhase('error', error instanceof Error ? error.message : String(error));
@@ -158,6 +199,15 @@ export class NekoConnection {
     }
 
     this.emitPhase('connecting');
+    this.openSocket();
+  }
+
+  private openSocket() {
+    if (!this.relayUrl || !this.pairingCode) {
+      this.emitPhase('error', copy('connection.error.invalidRelay'));
+      return;
+    }
+    const socketUrl = buildSocketUrl(this.relayUrl, this.pairingCode);
     const socket = new WebSocket(socketUrl);
     this.socket = socket;
 
@@ -188,27 +238,38 @@ export class NekoConnection {
     socket.addEventListener('close', () => {
       if (this.socket !== socket) return;
       this.clearPairingTimer();
-      const wasApproved = this.approved;
+      const shouldReconnect = this.canReconnect() && (this.approved || this.reconnecting || this.reconnectOnNextClose);
       this.approved = false;
       this.socket = null;
+      this.reconnectOnNextClose = false;
       this.rejectPending(new Error(copy('connection.error.closed')));
-      this.emitPhase('disconnected', wasApproved ? copy('connection.error.desktopOffline') : undefined);
+      if (shouldReconnect) {
+        this.scheduleReconnect();
+      } else {
+        this.reconnecting = false;
+        this.emitPhase('disconnected');
+      }
     });
 
     socket.addEventListener('error', () => {
       if (this.socket !== socket) return;
       this.clearPairingTimer();
+      if (this.reconnecting) return;
       this.emitPhase('error', copy('connection.error.unreachableRelay'));
     });
   }
 
-  disconnect() {
+  disconnect(emit = true) {
     this.clearPairingTimer();
+    this.clearReconnectTimer();
+    this.manualDisconnect = true;
+    this.reconnecting = false;
+    this.reconnectOnNextClose = false;
     this.approved = false;
     this.socket?.close(1000, 'client disconnect');
     this.socket = null;
     this.rejectPending(new Error(copy('connection.error.ended')));
-    this.emitPhase('disconnected');
+    if (emit) this.emitPhase('disconnected');
   }
 
   logout() {
@@ -243,8 +304,9 @@ export class NekoConnection {
   private handleMessage(message: RelayMessage) {
     if (message.type === 'relay.peer.left' && message.role === 'desktop') {
       this.approved = false;
+      this.reconnectOnNextClose = true;
       this.rejectPending(new Error(copy('connection.error.desktopOffline')));
-      this.emitPhase('disconnected', copy('connection.error.desktopOffline'));
+      this.emitPhase('connected', copy('connection.error.desktopOffline'));
       this.socket?.close(4002, 'desktop offline');
       return;
     }
@@ -261,16 +323,21 @@ export class NekoConnection {
         localStorage.setItem(resumeTokenKey(this.pairingCode), resumeToken);
       }
       this.approved = true;
+      this.reconnecting = false;
+      this.reconnectOnNextClose = false;
+      this.reconnectAttempts = 0;
       this.emitPhase('connected');
       this.emitEvent(message);
       return;
     }
     if (message.type === 'pair.rejected') {
+      this.manualDisconnect = true;
       if (this.pairingCode) localStorage.removeItem(resumeTokenKey(this.pairingCode));
       this.emitPhase('error', String(message.error || copy('connection.error.rejected')));
       return;
     }
     if (message.type === 'session.revoked') {
+      this.manualDisconnect = true;
       if (this.pairingCode) localStorage.removeItem(resumeTokenKey(this.pairingCode));
       localStorage.removeItem(SAVED_PAIRING_CODE_KEY);
       this.approved = false;
