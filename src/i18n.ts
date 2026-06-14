@@ -134,7 +134,7 @@ const translations: Record<AppLanguage, Partial<Record<TranslationKey, string>>>
     'app.settings.backgroundDescription': 'Escolha uma imagem do celular para deixar a tela mais imersiva. Ela fica salva só neste navegador.',
     'app.background.choose': 'Escolher imagem',
     'app.background.clear': 'Remover',
-    'app.settings.logout': 'Sair',
+    'app.settings.logout': 'sair',
     'app.persona.aria': 'Personas',
     'app.persona.title': 'Personas',
     'app.persona.active': 'Ativa',

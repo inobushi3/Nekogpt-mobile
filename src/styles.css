@@ -685,17 +685,22 @@ button {
 
 .settings-section--logout {
   gap: 0;
+  margin-top: 10px;
+  border-top: 0;
+  padding-top: 0;
+  justify-items: end;
 }
 
 .settings-logout {
-  min-height: 40px;
-  border: 1px solid rgba(255, 79, 109, 0.38);
-  border-radius: 12px;
-  background: rgba(255, 79, 109, 0.1);
+  min-height: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #ff9cad;
   cursor: pointer;
   font-size: 0.74rem;
   font-weight: 800;
+  padding: 0;
 }
 
 .settings-logout:active {

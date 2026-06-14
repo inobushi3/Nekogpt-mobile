@@ -35,6 +35,7 @@ const BACKGROUND_STORAGE_KEY = 'nekogpt:mobile-background';
 const MAX_BACKGROUND_DIMENSION = 1600;
 const MAX_MOBILE_MEDIA_BYTES = 18 * 1024 * 1024;
 const MOBILE_VISION_FRAME_MAX_DIMENSION = 1280;
+const SILENT_MOBILE_UNLOCK_AUDIO_URL = 'data:audio/wav;base64,UklGRgQCAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YeABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 const SUPPORTED_MOBILE_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 const SUPPORTED_MOBILE_VIDEO_MIME_TYPES = new Set(['video/webm', 'video/mp4', 'video/mpeg', 'video/quicktime', 'video/mov']);
 
@@ -815,6 +816,8 @@ export default function App() {
   const mobileTtsAnalyserRef = useRef<AnalyserNode | null>(null);
   const mobileTtsFrameRef = useRef<number | null>(null);
   const mobileTtsFallbackTimerRef = useRef<number | null>(null);
+  const mobileTtsUnlockAudioRef = useRef<HTMLAudioElement | null>(null);
+  const mobileTtsUnlockedRef = useRef(false);
   const mobileTtsActiveRef = useRef(false);
   const historyScrollRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<MobileChatMessage[]>(chatHistory.messages);
@@ -976,6 +979,33 @@ export default function App() {
   function unlockMobileTtsAudio() {
     const context = getMobileTtsAudioContext();
     void context?.resume?.().catch(() => undefined);
+    if (mobileTtsUnlockedRef.current) return;
+
+    let unlockAudio = mobileTtsUnlockAudioRef.current;
+    if (!unlockAudio) {
+      unlockAudio = new Audio(SILENT_MOBILE_UNLOCK_AUDIO_URL);
+      unlockAudio.preload = 'auto';
+      unlockAudio.setAttribute('playsinline', 'true');
+      mobileTtsUnlockAudioRef.current = unlockAudio;
+    }
+
+    try {
+      unlockAudio.currentTime = 0;
+      const playResult = unlockAudio.play();
+      if (playResult) {
+        void playResult
+          .then(() => {
+            mobileTtsUnlockedRef.current = true;
+            unlockAudio.pause();
+            unlockAudio.currentTime = 0;
+          })
+          .catch(() => undefined);
+      } else {
+        mobileTtsUnlockedRef.current = true;
+      }
+    } catch {
+      // Browsers may still require another direct gesture; the real TTS path will report that error.
+    }
   }
 
   function disconnectMobileTtsAudioGraph() {
@@ -1097,6 +1127,7 @@ export default function App() {
     try {
       await getMobileTtsAudioContext()?.resume?.().catch(() => undefined);
       await player.play();
+      mobileTtsUnlockedRef.current = true;
       setNotice('');
     } catch {
       stopMobileTtsPlayback();
@@ -1269,9 +1300,7 @@ export default function App() {
       });
       cameraStreamRef.current = stream;
       setCameraMode(mode);
-      setNotice(mode === 'user'
-        ? copy('app.status.cameraUserActive')
-        : copy('app.status.cameraEnvironmentActive'));
+      setNotice('');
     } catch (error) {
       stopCamera();
       setNotice(error instanceof Error ? formatMobileError(error) : copy('app.error.cameraDenied'));
@@ -1650,7 +1679,10 @@ export default function App() {
         defaultPairingCode={pairingCode}
         language={language}
         onLanguageChange={setLanguage}
-        onConnect={(url, code) => connection.connect(url, code)}
+        onConnect={(url, code) => {
+          unlockMobileTtsAudio();
+          connection.connect(url, code);
+        }}
       />
     );
   }
