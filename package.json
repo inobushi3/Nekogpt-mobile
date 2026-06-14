@@ -1,0 +1,31 @@
+{
+  "name": "nekogpt-mobile",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "relay:dev": "wrangler dev --config wrangler.jsonc",
+    "relay:deploy": "wrangler deploy --config wrangler.jsonc",
+    "test:fake-desktop": "node scripts/fake-desktop.mjs"
+  },
+  "dependencies": {
+    "fflate": "^0.8.2",
+    "pixi.js": "^8.18.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "untitled-pixi-live2d-engine": "^1.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260613.0",
+    "@types/react": "^18.3.28",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^6.0.2",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.16",
+    "wrangler": "^4.20.0",
+    "ws": "^8.18.2"
+  }
+}

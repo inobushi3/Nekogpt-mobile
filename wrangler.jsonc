@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nekogpt-mobile-relay",
+  "main": "worker/relay.ts",
+  "compatibility_date": "2026-06-13",
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SESSION_ROOMS",
+        "class_name": "SessionRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SessionRoom"]
+    }
+  ],
+  "vars": {
+    "ALLOWED_ORIGIN": "http://localhost:5174"
+  }
+}
