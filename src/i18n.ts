@@ -6,6 +6,8 @@ export type TranslationKey =
   | 'app.error.audioDecode'
   | 'app.error.ttsPlayback'
   | 'app.error.ttsBlocked'
+  | 'app.audio.unlock'
+  | 'app.audio.ready'
   | 'app.error.cameraUnsupported'
   | 'app.error.cameraDenied'
   | 'app.error.microphoneUnsupported'
@@ -106,6 +108,8 @@ const translations: Record<AppLanguage, Partial<Record<TranslationKey, string>>>
     'app.error.audioDecode': 'Este navegador não consegue converter o áudio para WAV PCM.',
     'app.error.ttsPlayback': 'Não foi possível tocar o TTS no navegador do celular.',
     'app.error.ttsBlocked': 'Áudio bloqueado pelo navegador. Toque na tela e envie a mensagem novamente.',
+    'app.audio.unlock': 'Ativar voz',
+    'app.audio.ready': 'Voz ativa',
     'app.error.cameraUnsupported': 'Este navegador não oferece acesso à câmera.',
     'app.error.cameraDenied': 'Permissão de câmera negada.',
     'app.error.microphoneUnsupported': 'Este navegador não oferece gravação de microfone.',
@@ -192,6 +196,8 @@ const translations: Record<AppLanguage, Partial<Record<TranslationKey, string>>>
     'app.error.audioDecode': 'This browser cannot convert audio to WAV PCM.',
     'app.error.ttsPlayback': 'Could not play TTS in the mobile browser.',
     'app.error.ttsBlocked': 'Audio was blocked by the browser. Tap the screen and send the message again.',
+    'app.audio.unlock': 'Enable voice',
+    'app.audio.ready': 'Voice enabled',
     'app.error.cameraUnsupported': 'This browser does not provide camera access.',
     'app.error.cameraDenied': 'Camera permission denied.',
     'app.error.microphoneUnsupported': 'This browser does not provide microphone recording.',
@@ -278,6 +284,8 @@ const translations: Record<AppLanguage, Partial<Record<TranslationKey, string>>>
     'app.error.audioDecode': 'Este navegador no puede convertir el audio a WAV PCM.',
     'app.error.ttsPlayback': 'No se pudo reproducir el TTS en el navegador móvil.',
     'app.error.ttsBlocked': 'El navegador bloqueó el audio. Toca la pantalla y envía el mensaje otra vez.',
+    'app.audio.unlock': 'Activar voz',
+    'app.audio.ready': 'Voz activa',
     'app.error.cameraUnsupported': 'Este navegador no ofrece acceso a la cámara.',
     'app.error.cameraDenied': 'Permiso de cámara denegado.',
     'app.error.microphoneUnsupported': 'Este navegador no ofrece grabación de micrófono.',
@@ -354,6 +362,8 @@ const translations: Record<AppLanguage, Partial<Record<TranslationKey, string>>>
     'app.error.audioDecode': 'Ce navigateur ne peut pas convertir l’audio en WAV PCM.',
     'app.error.ttsPlayback': 'Impossible de lire le TTS dans le navigateur mobile.',
     'app.error.ttsBlocked': 'Audio bloqué par le navigateur. Touchez l’écran puis renvoyez le message.',
+    'app.audio.unlock': 'Activer la voix',
+    'app.audio.ready': 'Voix active',
     'app.error.cameraUnsupported': 'Ce navigateur ne donne pas accès à la caméra.',
     'app.error.cameraDenied': 'Permission caméra refusée.',
     'app.error.microphoneUnsupported': 'Ce navigateur ne permet pas l’enregistrement du microphone.',
@@ -430,6 +440,8 @@ const translations: Record<AppLanguage, Partial<Record<TranslationKey, string>>>
     'app.error.audioDecode': 'Questo browser non può convertire l’audio in WAV PCM.',
     'app.error.ttsPlayback': 'Impossibile riprodurre il TTS nel browser mobile.',
     'app.error.ttsBlocked': 'Audio bloccato dal browser. Tocca lo schermo e invia di nuovo il messaggio.',
+    'app.audio.unlock': 'Attiva voce',
+    'app.audio.ready': 'Voce attiva',
     'app.error.cameraUnsupported': 'Questo browser non offre accesso alla fotocamera.',
     'app.error.cameraDenied': 'Permesso fotocamera negato.',
     'app.error.microphoneUnsupported': 'Questo browser non offre registrazione del microfono.',
@@ -506,6 +518,8 @@ const translations: Record<AppLanguage, Partial<Record<TranslationKey, string>>>
     'app.error.audioDecode': 'このブラウザは音声を WAV PCM に変換できません。',
     'app.error.ttsPlayback': 'モバイルブラウザで TTS を再生できませんでした。',
     'app.error.ttsBlocked': 'ブラウザが音声をブロックしました。画面をタップしてもう一度送信してください。',
+    'app.audio.unlock': '音声を有効化',
+    'app.audio.ready': '音声有効',
     'app.error.cameraUnsupported': 'このブラウザはカメラに対応していません。',
     'app.error.cameraDenied': 'カメラの許可が拒否されました。',
     'app.error.microphoneUnsupported': 'このブラウザはマイク録音に対応していません。',
@@ -582,6 +596,8 @@ const translations: Record<AppLanguage, Partial<Record<TranslationKey, string>>>
     'app.error.audioDecode': '此浏览器无法将音频转换为 WAV PCM。',
     'app.error.ttsPlayback': '无法在手机浏览器中播放 TTS。',
     'app.error.ttsBlocked': '音频被浏览器阻止。请点一下屏幕后重新发送消息。',
+    'app.audio.unlock': '启用语音',
+    'app.audio.ready': '语音已启用',
     'app.error.cameraUnsupported': '此浏览器不支持摄像头访问。',
     'app.error.cameraDenied': '摄像头权限被拒绝。',
     'app.error.microphoneUnsupported': '此浏览器不支持麦克风录音。',
@@ -658,6 +674,8 @@ const translations: Record<AppLanguage, Partial<Record<TranslationKey, string>>>
     'app.error.audioDecode': 'Этот браузер не может конвертировать аудио в WAV PCM.',
     'app.error.ttsPlayback': 'Не удалось воспроизвести TTS в мобильном браузере.',
     'app.error.ttsBlocked': 'Браузер заблокировал аудио. Коснитесь экрана и отправьте сообщение снова.',
+    'app.audio.unlock': 'Включить голос',
+    'app.audio.ready': 'Голос включён',
     'app.error.cameraUnsupported': 'Этот браузер не поддерживает доступ к камере.',
     'app.error.cameraDenied': 'Доступ к камере отклонён.',
     'app.error.microphoneUnsupported': 'Этот браузер не поддерживает запись с микрофона.',

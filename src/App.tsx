@@ -38,6 +38,314 @@ const MOBILE_VISION_FRAME_MAX_DIMENSION = 1280;
 const SILENT_MOBILE_UNLOCK_AUDIO_URL = 'data:audio/wav;base64,UklGRgQCAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YeABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 const SUPPORTED_MOBILE_IMAGE_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
 const SUPPORTED_MOBILE_VIDEO_MIME_TYPES = new Set(['video/webm', 'video/mp4', 'video/mpeg', 'video/quicktime', 'video/mov']);
+const MOBILE_MIC_SPEECH_LEVEL = 0.052;
+const MOBILE_MIC_SPEECH_CONFIRM_MS = 260;
+const MOBILE_MIC_SILENCE_AFTER_SPEECH_MS = 1250;
+const MOBILE_MIC_MIN_UTTERANCE_MS = 640;
+const MOBILE_MIC_TTS_COOLDOWN_MS = 720;
+const MOBILE_MIC_MAX_RECORDING_MS = 30_000;
+
+type BrowserAudioContext = typeof AudioContext;
+
+type MobileTtsPlaybackItem = {
+  source: Blob | string;
+  durationMs: number;
+  text?: string;
+  subtitle?: string;
+  emotion?: string;
+  activeUrl?: string;
+  revokeActiveUrl?: boolean;
+};
+
+type AudioPlaybackCallbacks = {
+  onAudioUnlockChange?: (unlocked: boolean) => void;
+  onUnlockRequired?: () => void;
+  onPlaybackStart?: (item: MobileTtsPlaybackItem) => void;
+  onPlaybackEnd?: (item: MobileTtsPlaybackItem, reason: 'ended' | 'blocked' | 'error' | 'stopped') => void;
+  onPlaybackBlocked?: (error: unknown) => void;
+  onPlaybackError?: (error: unknown) => void;
+  onAudioLevel?: (level: number) => void;
+};
+
+function getBrowserAudioContextClass(): BrowserAudioContext | null {
+  return window.AudioContext
+    || (window as typeof window & { webkitAudioContext?: BrowserAudioContext }).webkitAudioContext
+    || null;
+}
+
+function createNotAllowedAudioError() {
+  try {
+    return new DOMException('Audio playback requires a user gesture.', 'NotAllowedError');
+  } catch {
+    return new Error('Audio playback requires a user gesture.');
+  }
+}
+
+function isNotAllowedAudioError(error: unknown) {
+  return error instanceof DOMException
+    ? error.name === 'NotAllowedError'
+    : error instanceof Error && /notallowed|gesture|permission/i.test(error.message);
+}
+
+function rmsToMobileTtsMouthOpen(rms: number) {
+  const normalized = Math.min(1, Math.max(0, (rms - 0.018) / 0.18));
+  return Math.min(1, Math.max(0.02, normalized));
+}
+
+class AudioPlaybackManager {
+  private context: AudioContext | null = null;
+  private player: HTMLAudioElement | null = null;
+  private source: MediaElementAudioSourceNode | null = null;
+  private analyser: AnalyserNode | null = null;
+  private callbacks: AudioPlaybackCallbacks = {};
+  private queue: MobileTtsPlaybackItem[] = [];
+  private current: MobileTtsPlaybackItem | null = null;
+  private levelFrame: number | null = null;
+  private syntheticFrame: number | null = null;
+  private playing = false;
+  private audioUnlocked = false;
+
+  setCallbacks(callbacks: AudioPlaybackCallbacks) {
+    this.callbacks = callbacks;
+    callbacks.onAudioUnlockChange?.(this.audioUnlocked);
+  }
+
+  isUnlocked() {
+    return this.audioUnlocked;
+  }
+
+  private setUnlocked(unlocked: boolean) {
+    if (this.audioUnlocked === unlocked) return;
+    this.audioUnlocked = unlocked;
+    this.callbacks.onAudioUnlockChange?.(unlocked);
+  }
+
+  private getContext() {
+    const AudioContextClass = getBrowserAudioContextClass();
+    if (!AudioContextClass) return null;
+    if (!this.context || this.context.state === 'closed') {
+      this.context = new AudioContextClass();
+    }
+    return this.context;
+  }
+
+  private getPlayer() {
+    if (!this.player) {
+      this.player = new Audio();
+      this.player.preload = 'auto';
+      this.player.setAttribute('playsinline', 'true');
+    }
+    return this.player;
+  }
+
+  private clearPlayerSource() {
+    const player = this.player;
+    if (!player) return;
+    player.pause();
+    player.removeAttribute('src');
+    player.load();
+  }
+
+  private async resumeContext() {
+    const context = this.getContext();
+    if (!context || context.state === 'running') return true;
+    try {
+      await context.resume();
+      return true;
+    } catch (error) {
+      if (isNotAllowedAudioError(error)) {
+        this.setUnlocked(false);
+        this.callbacks.onUnlockRequired?.();
+      }
+      return false;
+    }
+  }
+
+  async unlockAudio() {
+    if (this.audioUnlocked) return true;
+    if (this.playing) return this.audioUnlocked;
+
+    const contextReady = await this.resumeContext();
+    const player = this.getPlayer();
+
+    try {
+      player.src = SILENT_MOBILE_UNLOCK_AUDIO_URL;
+      player.currentTime = 0;
+      await player.play();
+      player.pause();
+      player.currentTime = 0;
+      this.clearPlayerSource();
+      this.setUnlocked(contextReady || !this.context || this.context.state === 'running');
+      return this.audioUnlocked;
+    } catch {
+      this.clearPlayerSource();
+      this.setUnlocked(false);
+      this.callbacks.onUnlockRequired?.();
+      return false;
+    }
+  }
+
+  async resumeAfterPageReturn() {
+    if (!this.context || this.context.state !== 'suspended') return true;
+    const resumed = await this.resumeContext();
+    if (!resumed) this.callbacks.onUnlockRequired?.();
+    return resumed;
+  }
+
+  playTTS(source: Blob | string, details: Omit<MobileTtsPlaybackItem, 'source' | 'activeUrl' | 'revokeActiveUrl'>) {
+    this.queue.push({ ...details, source });
+    void this.drainQueue();
+  }
+
+  stopAll() {
+    this.queue = [];
+    if (this.current) this.finishCurrent('stopped');
+    this.stopLevelMonitoring();
+    this.clearPlayerSource();
+  }
+
+  destroy() {
+    this.stopAll();
+    this.source?.disconnect();
+    this.analyser?.disconnect();
+    this.source = null;
+    this.analyser = null;
+    void this.context?.close().catch(() => undefined);
+    this.context = null;
+    this.player = null;
+    this.setUnlocked(false);
+    this.callbacks = {};
+  }
+
+  private async drainQueue() {
+    if (this.playing) return;
+    const item = this.queue.shift();
+    if (!item) return;
+
+    this.current = item;
+    this.playing = true;
+    this.callbacks.onPlaybackStart?.(item);
+
+    const player = this.getPlayer();
+    const activeUrl = typeof item.source === 'string' ? item.source : URL.createObjectURL(item.source);
+    item.activeUrl = activeUrl;
+    item.revokeActiveUrl = typeof item.source !== 'string';
+    player.src = activeUrl;
+    player.currentTime = 0;
+    player.onended = () => this.finishCurrent('ended');
+    player.onerror = () => {
+      const error = player.error || new Error('TTS audio playback failed.');
+      this.callbacks.onPlaybackError?.(error);
+      this.finishCurrent('error');
+    };
+
+    try {
+      const contextReady = await this.resumeContext();
+      if (this.context && !contextReady) throw createNotAllowedAudioError();
+      this.connectAudioGraph();
+      this.startLevelMonitoring(item.durationMs);
+      await player.play();
+      this.setUnlocked(true);
+    } catch (error) {
+      this.setUnlocked(false);
+      if (isNotAllowedAudioError(error)) {
+        this.callbacks.onPlaybackBlocked?.(error);
+        this.callbacks.onUnlockRequired?.();
+        this.finishCurrent('blocked');
+      } else {
+        this.callbacks.onPlaybackError?.(error);
+        this.finishCurrent('error');
+      }
+    }
+  }
+
+  private connectAudioGraph() {
+    const context = this.getContext();
+    if (!context) return;
+    const player = this.getPlayer();
+    if (!this.source) this.source = context.createMediaElementSource(player);
+    if (!this.analyser) {
+      this.analyser = context.createAnalyser();
+      this.analyser.fftSize = 1024;
+      this.analyser.smoothingTimeConstant = 0.45;
+      this.source.connect(this.analyser);
+      this.analyser.connect(context.destination);
+    }
+  }
+
+  private startLevelMonitoring(durationMs: number) {
+    this.stopLevelMonitoring();
+    const analyser = this.analyser;
+    if (!analyser) {
+      this.startSyntheticLevel(durationMs);
+      return;
+    }
+    const samples = new Uint8Array(analyser.fftSize);
+    let previousLevel = -1;
+    const tick = () => {
+      if (!this.playing || !this.current) return;
+      analyser.getByteTimeDomainData(samples);
+      let sum = 0;
+      for (const sample of samples) {
+        const normalized = (sample - 128) / 128;
+        sum += normalized * normalized;
+      }
+      const level = rmsToMobileTtsMouthOpen(Math.sqrt(sum / samples.length));
+      if (Math.abs(level - previousLevel) >= 0.018) {
+        previousLevel = level;
+        this.callbacks.onAudioLevel?.(level);
+      }
+      this.levelFrame = window.requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  private startSyntheticLevel(durationMs: number) {
+    const startedAt = performance.now();
+    const tick = () => {
+      if (!this.playing || !this.current) return;
+      const elapsed = performance.now() - startedAt;
+      if (elapsed <= durationMs) {
+        const wave = Math.abs(Math.sin(elapsed / 92));
+        this.callbacks.onAudioLevel?.(0.18 + wave * 0.46);
+      }
+      this.syntheticFrame = window.requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  private stopLevelMonitoring() {
+    if (this.levelFrame !== null) {
+      window.cancelAnimationFrame(this.levelFrame);
+      this.levelFrame = null;
+    }
+    if (this.syntheticFrame !== null) {
+      window.cancelAnimationFrame(this.syntheticFrame);
+      this.syntheticFrame = null;
+    }
+  }
+
+  private finishCurrent(reason: 'ended' | 'blocked' | 'error' | 'stopped') {
+    const item = this.current;
+    if (!item) return;
+    const player = this.player;
+    this.stopLevelMonitoring();
+    if (player) {
+      player.onended = null;
+      player.onerror = null;
+      player.pause();
+      player.removeAttribute('src');
+      player.load();
+    }
+    if (item.revokeActiveUrl && item.activeUrl) URL.revokeObjectURL(item.activeUrl);
+    this.current = null;
+    this.playing = false;
+    this.callbacks.onPlaybackEnd?.(item, reason);
+    if (this.queue.length) void this.drainQueue();
+  }
+}
+
+const audioPlaybackManager = new AudioPlaybackManager();
 
 function getSavedBackground(): MobileBackground {
   try {
@@ -635,11 +943,6 @@ function estimateMobileTtsDurationMs(text: string) {
   return Math.max(1200, Math.min(45_000, words * 360 + cleanText.length * 18));
 }
 
-function rmsToMobileTtsMouthOpen(rms: number) {
-  if (!Number.isFinite(rms) || rms <= 0.003) return 0;
-  return Math.max(0, Math.min(1, Math.pow(Math.min(1, rms * 8.5), 0.72)));
-}
-
 function normalizeTtsAudioPayload(input: unknown): CompanionTtsAudio | null {
   const value = input && typeof input === 'object' ? input as Record<string, unknown> : {};
   let mimeType = typeof value.mimeType === 'string' ? value.mimeType.trim() : '';
@@ -659,6 +962,44 @@ function normalizeTtsAudioPayload(input: unknown): CompanionTtsAudio | null {
     emotion: typeof value.emotion === 'string' ? value.emotion : '',
     durationMs: Number(value.durationMs) > 0 ? Number(value.durationMs) : undefined,
   };
+}
+
+function base64ToBlob(data: string, mimeType: string) {
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: mimeType });
+}
+
+function hasUsefulMobileSpeech(samples: Float32Array, sampleRate: number) {
+  if (!samples.length || !sampleRate) return true;
+  const durationMs = (samples.length / sampleRate) * 1000;
+  if (durationMs < MOBILE_MIC_MIN_UTTERANCE_MS) return false;
+
+  const windowSize = Math.max(256, Math.floor(sampleRate * 0.08));
+  const step = Math.max(128, Math.floor(windowSize / 2));
+  let peak = 0;
+  let bestWindowRms = 0;
+  let activeWindows = 0;
+
+  for (let offset = 0; offset < samples.length; offset += step) {
+    const end = Math.min(samples.length, offset + windowSize);
+    let sum = 0;
+    let localPeak = 0;
+    for (let index = offset; index < end; index += 1) {
+      const sample = Math.abs(samples[index] || 0);
+      localPeak = Math.max(localPeak, sample);
+      sum += sample * sample;
+    }
+    const rms = Math.sqrt(sum / Math.max(1, end - offset));
+    peak = Math.max(peak, localPeak);
+    bestWindowRms = Math.max(bestWindowRms, rms);
+    if (rms >= 0.018 || localPeak >= 0.11) activeWindows += 1;
+  }
+
+  return peak >= 0.085 && bestWindowRms >= 0.02 && activeWindows >= 2;
 }
 
 type ChatMessageViewProps = {
@@ -758,6 +1099,21 @@ function MediaIcon() {
   );
 }
 
+function SoundIcon({ muted }: { muted: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 9.5v5h3.5L13 19V5L7.5 9.5H4Z" />
+      {!muted && (
+        <>
+          <path d="M16 9a4.2 4.2 0 0 1 0 6" />
+          <path d="M18.5 6.5a7.8 7.8 0 0 1 0 11" />
+        </>
+      )}
+      {muted && <path className="sound-icon__slash" d="M4.8 4.8 19.2 19.2" />}
+    </svg>
+  );
+}
+
 export default function App() {
   const connection = useMemo(() => new NekoConnection(), []);
   const initialLanguage = useMemo(() => getSavedLanguage(), []);
@@ -777,6 +1133,8 @@ export default function App() {
   const [speaking, setSpeaking] = useState(false);
   const [listening, setListening] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
+  const [audioUnlocked, setAudioUnlocked] = useState(() => audioPlaybackManager.isUnlocked());
+  const [voiceUnlockVisible, setVoiceUnlockVisible] = useState(false);
   const [notice, setNotice] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -809,16 +1167,12 @@ export default function App() {
   const speechDetectedRef = useRef(false);
   const silenceStartedAtRef = useRef(0);
   const recordingStartedAtRef = useRef(0);
+  const speechCandidateStartedAtRef = useRef(0);
   const speechTimerRef = useRef<number | null>(null);
-  const mobileTtsPlayerRef = useRef<HTMLAudioElement | null>(null);
-  const mobileTtsAudioContextRef = useRef<AudioContext | null>(null);
-  const mobileTtsSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const mobileTtsAnalyserRef = useRef<AnalyserNode | null>(null);
-  const mobileTtsFrameRef = useRef<number | null>(null);
-  const mobileTtsFallbackTimerRef = useRef<number | null>(null);
-  const mobileTtsUnlockAudioRef = useRef<HTMLAudioElement | null>(null);
-  const mobileTtsUnlockedRef = useRef(false);
   const mobileTtsActiveRef = useRef(false);
+  const suspendMicForTtsRef = useRef(false);
+  const restartMicAfterTtsRef = useRef(false);
+  const lastTtsPlaybackEndedAtRef = useRef(0);
   const historyScrollRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<MobileChatMessage[]>(chatHistory.messages);
   const sendingRef = useRef(false);
@@ -871,12 +1225,41 @@ export default function App() {
   }, [connection]);
 
   useEffect(() => {
-    const unlock = () => unlockMobileTtsAudio();
-    window.addEventListener('pointerdown', unlock, { passive: true });
-    window.addEventListener('touchstart', unlock, { passive: true });
+    audioPlaybackManager.setCallbacks({
+      onAudioUnlockChange: (unlocked) => {
+        setAudioUnlocked(unlocked);
+        if (unlocked) setVoiceUnlockVisible(false);
+      },
+      onUnlockRequired: () => {
+        setVoiceUnlockVisible(true);
+      },
+      onPlaybackStart: beginMobileTtsVisualState,
+      onPlaybackEnd: finishMobileTtsVisualState,
+      onPlaybackBlocked: () => {
+        setNotice(t(language, 'app.error.ttsBlocked'));
+      },
+      onPlaybackError: () => {
+        setNotice(t(language, 'app.error.ttsPlayback'));
+      },
+      onAudioLevel: setAudioLevel,
+    });
+    return () => audioPlaybackManager.setCallbacks({});
+  }, [language]);
+
+  useEffect(() => {
+    const verifyAudioAfterReturn = () => {
+      if (document.visibilityState && document.visibilityState !== 'visible') return;
+      void audioPlaybackManager.resumeAfterPageReturn()
+        .then((resumed) => {
+          setAudioUnlocked(audioPlaybackManager.isUnlocked());
+          if (!resumed) setVoiceUnlockVisible(true);
+        });
+    };
+    document.addEventListener('visibilitychange', verifyAudioAfterReturn);
+    window.addEventListener('pageshow', verifyAudioAfterReturn);
     return () => {
-      window.removeEventListener('pointerdown', unlock);
-      window.removeEventListener('touchstart', unlock);
+      document.removeEventListener('visibilitychange', verifyAudioAfterReturn);
+      window.removeEventListener('pageshow', verifyAudioAfterReturn);
     };
   }, []);
 
@@ -952,7 +1335,7 @@ export default function App() {
     stopMobileTtsPlayback(false);
     micEnabledRef.current = false;
     recorderStreamRef.current?.getTracks().forEach((track) => track.stop());
-    void mobileTtsAudioContextRef.current?.close().catch(() => undefined);
+    audioPlaybackManager.destroy();
     if (speechTimerRef.current !== null) window.clearTimeout(speechTimerRef.current);
     if (bundleRetryTimerRef.current !== null) window.clearTimeout(bundleRetryTimerRef.current);
   }, []);
@@ -966,173 +1349,54 @@ export default function App() {
     }
   }, [cameraMode]);
 
-  function getMobileTtsAudioContext() {
-    const AudioContextClass = window.AudioContext
-      || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) return null;
-    if (!mobileTtsAudioContextRef.current || mobileTtsAudioContextRef.current.state === 'closed') {
-      mobileTtsAudioContextRef.current = new AudioContextClass();
-    }
-    return mobileTtsAudioContextRef.current;
-  }
-
-  function unlockMobileTtsAudio() {
-    const context = getMobileTtsAudioContext();
-    void context?.resume?.().catch(() => undefined);
-    if (mobileTtsUnlockedRef.current) return;
-
-    let unlockAudio = mobileTtsUnlockAudioRef.current;
-    if (!unlockAudio) {
-      unlockAudio = new Audio(SILENT_MOBILE_UNLOCK_AUDIO_URL);
-      unlockAudio.preload = 'auto';
-      unlockAudio.setAttribute('playsinline', 'true');
-      mobileTtsUnlockAudioRef.current = unlockAudio;
-    }
-
-    try {
-      unlockAudio.currentTime = 0;
-      const playResult = unlockAudio.play();
-      if (playResult) {
-        void playResult
-          .then(() => {
-            mobileTtsUnlockedRef.current = true;
-            unlockAudio.pause();
-            unlockAudio.currentTime = 0;
-          })
-          .catch(() => undefined);
-      } else {
-        mobileTtsUnlockedRef.current = true;
-      }
-    } catch {
-      // Browsers may still require another direct gesture; the real TTS path will report that error.
-    }
-  }
-
-  function disconnectMobileTtsAudioGraph() {
-    if (mobileTtsFrameRef.current !== null) {
-      window.cancelAnimationFrame(mobileTtsFrameRef.current);
-      mobileTtsFrameRef.current = null;
-    }
-    if (mobileTtsFallbackTimerRef.current !== null) {
-      window.clearTimeout(mobileTtsFallbackTimerRef.current);
-      mobileTtsFallbackTimerRef.current = null;
-    }
-    mobileTtsSourceRef.current?.disconnect();
-    mobileTtsAnalyserRef.current?.disconnect();
-    mobileTtsSourceRef.current = null;
-    mobileTtsAnalyserRef.current = null;
-  }
-
   function stopMobileTtsPlayback(updateState = true) {
+    audioPlaybackManager.stopAll();
     mobileTtsActiveRef.current = false;
-    disconnectMobileTtsAudioGraph();
-    const player = mobileTtsPlayerRef.current;
-    mobileTtsPlayerRef.current = null;
-    if (player) {
-      player.pause();
-      player.removeAttribute('src');
-      player.load();
-    }
     if (updateState) {
       setSpeaking(false);
       setAudioLevel(0);
     }
   }
 
-  function startSyntheticMobileTtsMouth(durationMs: number) {
-    const startedAt = performance.now();
-    const tick = () => {
-      if (!mobileTtsActiveRef.current) return;
-      const elapsed = performance.now() - startedAt;
-      if (elapsed <= durationMs) {
-        const wave = Math.abs(Math.sin(elapsed / 92));
-        setAudioLevel(0.18 + wave * 0.46);
-      }
-      mobileTtsFrameRef.current = window.requestAnimationFrame(tick);
-    };
-    tick();
+  async function requestAudioUnlock() {
+    const unlocked = await audioPlaybackManager.unlockAudio();
+    setAudioUnlocked(unlocked);
+    setVoiceUnlockVisible(!unlocked);
+    if (unlocked) setNotice('');
+    return unlocked;
   }
 
-  function startMobileTtsAudioMonitor(player: HTMLAudioElement) {
-    const context = getMobileTtsAudioContext();
-    if (!context) return false;
-    try {
-      const source = context.createMediaElementSource(player);
-      const analyser = context.createAnalyser();
-      analyser.fftSize = 1024;
-      analyser.smoothingTimeConstant = 0.45;
-      source.connect(analyser);
-      analyser.connect(context.destination);
-      mobileTtsSourceRef.current = source;
-      mobileTtsAnalyserRef.current = analyser;
-      const samples = new Uint8Array(analyser.fftSize);
-      let previousLevel = -1;
-
-      const tick = () => {
-        if (!mobileTtsActiveRef.current || mobileTtsPlayerRef.current !== player) return;
-        analyser.getByteTimeDomainData(samples);
-        let sum = 0;
-        for (const sample of samples) {
-          const normalized = (sample - 128) / 128;
-          sum += normalized * normalized;
-        }
-        const level = rmsToMobileTtsMouthOpen(Math.sqrt(sum / samples.length));
-        if (Math.abs(level - previousLevel) >= 0.018) {
-          previousLevel = level;
-          setAudioLevel(level);
-        }
-        mobileTtsFrameRef.current = window.requestAnimationFrame(tick);
-      };
-
-      tick();
-      return true;
-    } catch {
-      disconnectMobileTtsAudioGraph();
-      return false;
-    }
-  }
-
-  async function playMobileTtsAudio(payload: CompanionTtsAudio) {
-    stopMobileTtsPlayback(false);
+  function beginMobileTtsVisualState(item: MobileTtsPlaybackItem) {
     if (speechTimerRef.current !== null) {
       window.clearTimeout(speechTimerRef.current);
       speechTimerRef.current = null;
     }
-
-    const durationMs = payload.durationMs || estimateMobileTtsDurationMs(payload.subtitle || payload.text || '');
-    const player = new Audio(`data:${payload.mimeType};base64,${payload.data}`);
-    player.preload = 'auto';
-    player.setAttribute('playsinline', 'true');
-    mobileTtsPlayerRef.current = player;
+    pauseMicrophoneForMobileTts();
     mobileTtsActiveRef.current = true;
     setListening(false);
     setSpeaking(true);
     setAudioLevel(0.24);
-    const payloadEmotion = normalizeMobileEmotion(payload.emotion)
-      || detectMobileEmotionFromText(`${payload.text || ''}\n${payload.subtitle || ''}`);
+    const payloadEmotion = normalizeMobileEmotion(item.emotion)
+      || detectMobileEmotionFromText(`${item.text || ''}\n${item.subtitle || ''}`);
     if (payloadEmotion) applyMobileEmotion(payloadEmotion);
+  }
 
-    player.onended = () => {
-      if (mobileTtsPlayerRef.current === player) stopMobileTtsPlayback();
-    };
-    player.onerror = () => {
-      if (mobileTtsPlayerRef.current === player) {
-        stopMobileTtsPlayback();
-        setNotice(copy('app.error.ttsPlayback'));
-      }
-    };
+  function finishMobileTtsVisualState() {
+    mobileTtsActiveRef.current = false;
+    lastTtsPlaybackEndedAtRef.current = performance.now();
+    setSpeaking(false);
+    setAudioLevel(0);
+    resumeMicrophoneAfterMobileTts();
+  }
 
-    const monitored = startMobileTtsAudioMonitor(player);
-    if (!monitored) startSyntheticMobileTtsMouth(durationMs);
-    try {
-      await getMobileTtsAudioContext()?.resume?.().catch(() => undefined);
-      await player.play();
-      mobileTtsUnlockedRef.current = true;
-      setNotice('');
-    } catch {
-      stopMobileTtsPlayback();
-      setNotice(copy('app.error.ttsBlocked'));
-    }
+  function playMobileTtsAudio(payload: CompanionTtsAudio) {
+    const durationMs = payload.durationMs || estimateMobileTtsDurationMs(payload.subtitle || payload.text || '');
+    audioPlaybackManager.playTTS(base64ToBlob(payload.data, payload.mimeType), {
+      durationMs,
+      text: payload.text,
+      subtitle: payload.subtitle,
+      emotion: payload.emotion,
+    });
   }
 
   function handleCompanionEvent(message: RelayMessage) {
@@ -1210,7 +1474,7 @@ export default function App() {
     const clean = messageText.trim();
     const activeMedia = pendingMedia;
     if ((!clean && !activeMedia) || sendingRef.current) return;
-    unlockMobileTtsAudio();
+    void requestAudioUnlock();
     const previousMessages = messagesRef.current;
     const userMessageText = clean || copy('app.chat.mediaOnlyMessage');
     const mediaAttachments = activeMedia ? [activeMedia.attachment] : [];
@@ -1462,14 +1726,14 @@ export default function App() {
     audioContextRef.current = null;
     speechDetectedRef.current = false;
     silenceStartedAtRef.current = 0;
+    speechCandidateStartedAtRef.current = 0;
   }
 
   function startSilenceDetection(stream: MediaStream) {
-    const AudioContextClass = window.AudioContext
-      || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const AudioContextClass = getBrowserAudioContextClass();
     voiceCycleTimerRef.current = window.setTimeout(() => {
       stopRecording(!speechDetectedRef.current);
-    }, 30_000);
+    }, MOBILE_MIC_MAX_RECORDING_MS);
     if (!AudioContextClass) return;
     const context = new AudioContextClass();
     const analyser = context.createAnalyser();
@@ -1500,6 +1764,7 @@ export default function App() {
     pcmSampleRateRef.current = context.sampleRate;
     void context.resume().catch(() => undefined);
     recordingStartedAtRef.current = performance.now();
+    speechCandidateStartedAtRef.current = 0;
 
     const analyze = () => {
       const recorder = recorderRef.current;
@@ -1512,17 +1777,24 @@ export default function App() {
       }
       const level = Math.sqrt(energy / samples.length);
       const now = performance.now();
-      if (level >= 0.035) {
-        speechDetectedRef.current = true;
-        silenceStartedAtRef.current = 0;
+      const inTtsCooldown = now - lastTtsPlaybackEndedAtRef.current < MOBILE_MIC_TTS_COOLDOWN_MS;
+      if (!inTtsCooldown && level >= MOBILE_MIC_SPEECH_LEVEL) {
+        if (!speechCandidateStartedAtRef.current) speechCandidateStartedAtRef.current = now;
+        if (now - speechCandidateStartedAtRef.current >= MOBILE_MIC_SPEECH_CONFIRM_MS) {
+          speechDetectedRef.current = true;
+          silenceStartedAtRef.current = 0;
+        }
       } else if (speechDetectedRef.current) {
+        speechCandidateStartedAtRef.current = 0;
         if (!silenceStartedAtRef.current) silenceStartedAtRef.current = now;
-        if (now - silenceStartedAtRef.current >= 1050) {
+        if (now - silenceStartedAtRef.current >= MOBILE_MIC_SILENCE_AFTER_SPEECH_MS) {
           stopRecording(false);
           return;
         }
+      } else {
+        speechCandidateStartedAtRef.current = 0;
       }
-      if (now - recordingStartedAtRef.current >= 30_000) {
+      if (now - recordingStartedAtRef.current >= MOBILE_MIC_MAX_RECORDING_MS) {
         stopRecording(!speechDetectedRef.current);
         return;
       }
@@ -1531,8 +1803,25 @@ export default function App() {
     silenceFrameRef.current = window.requestAnimationFrame(analyze);
   }
 
+  function pauseMicrophoneForMobileTts() {
+    if (!micEnabledRef.current) return;
+    suspendMicForTtsRef.current = true;
+    restartMicAfterTtsRef.current = true;
+    pendingMicRestartRef.current = false;
+    if (recorderRef.current?.state === 'recording') stopRecording(true);
+  }
+
+  function resumeMicrophoneAfterMobileTts() {
+    suspendMicForTtsRef.current = false;
+    if (!restartMicAfterTtsRef.current) return;
+    restartMicAfterTtsRef.current = false;
+    if (micEnabledRef.current) {
+      window.setTimeout(() => void startRecordingCycle(), MOBILE_MIC_TTS_COOLDOWN_MS);
+    }
+  }
+
   async function enableMicrophone() {
-    unlockMobileTtsAudio();
+    void requestAudioUnlock();
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       setNotice(copy('app.error.microphoneUnsupported'));
       return;
@@ -1546,6 +1835,10 @@ export default function App() {
 
   async function startRecordingCycle() {
     if (!micEnabledRef.current || recorderRef.current?.state === 'recording') return;
+    if (mobileTtsActiveRef.current || suspendMicForTtsRef.current) {
+      restartMicAfterTtsRef.current = true;
+      return;
+    }
     if (transcribingRef.current) {
       pendingMicRestartRef.current = true;
       return;
@@ -1555,7 +1848,12 @@ export default function App() {
       let stream = recorderStreamRef.current;
       if (!stream?.active || !stream.getAudioTracks().some((track) => track.readyState === 'live')) {
         stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          audio: {
+            echoCancellation: { ideal: true },
+            noiseSuppression: { ideal: true },
+            autoGainControl: { ideal: false },
+            channelCount: { ideal: 1 },
+          },
         });
         if (!micEnabledRef.current) {
           stream.getTracks().forEach((track) => track.stop());
@@ -1617,6 +1915,8 @@ export default function App() {
   function disableMicrophone() {
     micEnabledRef.current = false;
     pendingMicRestartRef.current = false;
+    suspendMicForTtsRef.current = false;
+    restartMicAfterTtsRef.current = false;
     setMicEnabled(false);
     stopRecording(true);
     recorderStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -1631,10 +1931,12 @@ export default function App() {
     pcmSamples: Float32Array,
     pcmSampleRate: number,
   ) {
-    if (!discard && (pcmSamples.length || blob.size)) {
+    const usefulSpeech = hasUsefulMobileSpeech(pcmSamples, pcmSampleRate)
+      && performance.now() - lastTtsPlaybackEndedAtRef.current >= MOBILE_MIC_TTS_COOLDOWN_MS;
+    if (!discard && usefulSpeech && (pcmSamples.length || blob.size)) {
       await transcribeRecording(blob, pcmSamples, pcmSampleRate);
     }
-    if (micEnabledRef.current) {
+    if (micEnabledRef.current && !suspendMicForTtsRef.current && !mobileTtsActiveRef.current) {
       window.setTimeout(() => void startRecordingCycle(), 180);
     }
   }
@@ -1680,7 +1982,7 @@ export default function App() {
         language={language}
         onLanguageChange={setLanguage}
         onConnect={(url, code) => {
-          unlockMobileTtsAudio();
+          void requestAudioUnlock();
           connection.connect(url, code);
         }}
       />
@@ -1734,6 +2036,16 @@ export default function App() {
           <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" />
           <path d="m19.2 13.6 1.3 1-.2 1.5-1.6.6a7.7 7.7 0 0 1-1 1.7l.2 1.7-1.3.9-1.4-1a8 8 0 0 1-2 .6l-.6 1.6h-1.5l-.6-1.6a8 8 0 0 1-2-.6l-1.4 1-1.3-.9.2-1.7a7.7 7.7 0 0 1-1-1.7l-1.6-.6-.2-1.5 1.3-1a8 8 0 0 1 0-2l-1.3-1 .2-1.5L5 7.5a7.7 7.7 0 0 1 1-1.7L5.8 4l1.3-.9 1.4 1a8 8 0 0 1 2-.6l.6-1.6h1.5l.6 1.6a8 8 0 0 1 2 .6l1.4-1 1.3.9-.2 1.7a7.7 7.7 0 0 1 1 1.7l1.6.6.2 1.5-1.3 1a8 8 0 0 1 0 2Z" />
         </svg>
+      </button>
+
+      <button
+        className={`audio-trigger ${audioUnlocked ? 'is-ready' : 'is-muted'} ${speaking ? 'is-playing' : ''}`}
+        type="button"
+        onClick={() => void requestAudioUnlock()}
+        aria-label={audioUnlocked ? copy('app.audio.ready') : copy('app.audio.unlock')}
+        aria-pressed={audioUnlocked}
+      >
+        <SoundIcon muted={!audioUnlocked} />
       </button>
 
       <aside className={`settings-panel ${settingsOpen ? 'is-open' : ''}`} aria-hidden={!settingsOpen}>
@@ -1914,6 +2226,13 @@ export default function App() {
             ))}
           </div>
         </section>
+      )}
+
+      {voiceUnlockVisible && (
+        <button className="voice-unlock-overlay" type="button" onClick={() => void requestAudioUnlock()}>
+          <SoundIcon muted />
+          <span>{copy('app.audio.unlock')}</span>
+        </button>
       )}
 
       {notice && (
