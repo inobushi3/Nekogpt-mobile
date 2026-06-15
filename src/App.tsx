@@ -14,6 +14,8 @@ import {
 } from './lib/mobileVad';
 import type {
   CompanionChatHistory,
+  CompanionLive2DState,
+  CompanionSnapshot,
   CompanionTtsAudio,
   ConnectionPhase,
   Live2DBundle,
@@ -965,6 +967,75 @@ function normalizeTtsAudioPayload(input: unknown): CompanionTtsAudio | null {
   };
 }
 
+function cleanMobileStateString(value: unknown, maxLength = 180) {
+  return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
+}
+
+function normalizeMobileStringMap(value: unknown) {
+  const result: Record<string, string> = {};
+  if (!value || typeof value !== 'object') return result;
+  Object.entries(value as Record<string, unknown>).slice(0, 80).forEach(([key, entry]) => {
+    const cleanKey = cleanMobileStateString(key, 80);
+    const cleanValue = cleanMobileStateString(entry, 180);
+    if (cleanKey && cleanValue) result[cleanKey] = cleanValue;
+  });
+  return result;
+}
+
+function normalizeCompanionLive2DState(input: unknown, fallback: CompanionLive2DState | null = null): CompanionLive2DState | null {
+  const value = input && typeof input === 'object' ? input as Record<string, unknown> : {};
+  const source = value.live2d && typeof value.live2d === 'object'
+    ? {
+        ...(value.live2d as Record<string, unknown>),
+        ...(value.emotion !== undefined ? { emotion: value.emotion } : {}),
+        ...(value.expression !== undefined ? { expression: value.expression } : {}),
+        ...(value.motion !== undefined ? { motion: value.motion } : {}),
+      }
+    : value;
+  if (!Object.keys(source).length) return fallback;
+
+  const actionSource = source.live2dAction && typeof source.live2dAction === 'object'
+    ? source.live2dAction as Record<string, unknown>
+    : null;
+  const actionKind = actionSource?.kind === 'expression' || actionSource?.kind === 'motion'
+    ? actionSource.kind
+    : null;
+  const actionValue = cleanMobileStateString(actionSource?.value, 180);
+  const intervalMs = Number(actionSource?.intervalMs);
+
+  const next: CompanionLive2DState = {
+    ...(fallback || {}),
+    currentStateId: cleanMobileStateString(source.currentStateId, 80) || fallback?.currentStateId,
+    currentStateName: cleanMobileStateString(source.currentStateName, 120) || fallback?.currentStateName,
+    stateEnabled: typeof source.stateEnabled === 'boolean' ? source.stateEnabled : fallback?.stateEnabled,
+    stateMode: cleanMobileStateString(source.stateMode, 40) || fallback?.stateMode,
+    live2dAction: actionKind && actionValue
+      ? {
+          stateId: cleanMobileStateString(actionSource?.stateId, 80) || cleanMobileStateString(source.currentStateId, 80),
+          kind: actionKind,
+          value: actionValue,
+          intervalMs: Number.isFinite(intervalMs) && intervalMs > 0 ? Math.min(30_000, Math.max(1500, intervalMs)) : 10_000,
+        }
+      : (actionSource || 'live2dAction' in source) ? null : fallback?.live2dAction || null,
+    expressionMap: 'expressionMap' in source ? normalizeMobileStringMap(source.expressionMap) : fallback?.expressionMap,
+    motionMap: 'motionMap' in source ? normalizeMobileStringMap(source.motionMap) : fallback?.motionMap,
+    expressionPreset: cleanMobileStateString(source.expressionPreset, 180) || fallback?.expressionPreset,
+    motionPreset: cleanMobileStateString(source.motionPreset, 180) || fallback?.motionPreset,
+    autoExpressionsEnabled: typeof source.autoExpressionsEnabled === 'boolean'
+      ? source.autoExpressionsEnabled
+      : fallback?.autoExpressionsEnabled,
+    autoMotionsEnabled: typeof source.autoMotionsEnabled === 'boolean'
+      ? source.autoMotionsEnabled
+      : fallback?.autoMotionsEnabled,
+    emotion: normalizeMobileEmotion(source.emotion) || normalizeMobileEmotion(source.expression) || fallback?.emotion,
+    expression: cleanMobileStateString(source.expression, 120) || fallback?.expression,
+    motion: cleanMobileStateString(source.motion, 180) || fallback?.motion,
+    updatedAt: Number(source.updatedAt) > 0 ? Number(source.updatedAt) : Date.now(),
+  };
+
+  return next;
+}
+
 function base64ToBlob(data: string, mimeType: string) {
   const binary = atob(data);
   const bytes = new Uint8Array(binary.length);
@@ -1102,6 +1173,7 @@ export default function App() {
   const [transcribing, setTranscribing] = useState(false);
   const [emotion, setEmotion] = useState('neutral');
   const [emotionTrigger, setEmotionTrigger] = useState(0);
+  const [companionLive2DState, setCompanionLive2DState] = useState<CompanionLive2DState | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [listening, setListening] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
@@ -1144,12 +1216,14 @@ export default function App() {
   const lastTtsPlaybackEndedAtRef = useRef(0);
   const historyScrollRef = useRef<HTMLDivElement>(null);
   const messagesRef = useRef<MobileChatMessage[]>(chatHistory.messages);
+  const companionLive2DStateRef = useRef<CompanionLive2DState | null>(null);
   const sendingRef = useRef(false);
   const bundleRetryCountRef = useRef(0);
   const bundleRetryTimerRef = useRef<number | null>(null);
   const touchReactionInFlightRef = useRef(false);
 
   messagesRef.current = chatHistory.messages;
+  companionLive2DStateRef.current = companionLive2DState;
   sendingRef.current = sending;
   transcribingRef.current = transcribing;
   cameraModeRef.current = cameraMode;
@@ -1164,6 +1238,16 @@ export default function App() {
     if (!nextEmotion) return;
     setEmotion(nextEmotion);
     setEmotionTrigger((current) => current + 1);
+  }
+
+  function applyCompanionLive2DState(value: unknown) {
+    const nextState = normalizeCompanionLive2DState(value, companionLive2DStateRef.current);
+    if (!nextState) return;
+    companionLive2DStateRef.current = nextState;
+    setCompanionLive2DState(nextState);
+    const nextEmotion = normalizeMobileEmotion(nextState.emotion)
+      || normalizeMobileEmotion(nextState.expression);
+    if (nextEmotion) applyMobileEmotion(nextEmotion);
   }
 
   useEffect(() => {
@@ -1250,8 +1334,30 @@ export default function App() {
   }, [connection, language, phase]);
 
   useEffect(() => {
+    if (phase !== 'connected') return;
+    let cancelled = false;
+
+    const refreshSnapshot = () => {
+      void connection.rpc<CompanionSnapshot>('companion.snapshot', undefined, 12_000)
+        .then((snapshot) => {
+          if (cancelled) return;
+          applyCompanionLive2DState(snapshot.live2d || snapshot);
+        })
+        .catch(() => undefined);
+    };
+
+    refreshSnapshot();
+    const timer = window.setInterval(refreshSnapshot, 3500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [connection, phase]);
+
+  useEffect(() => {
     if (phase !== 'connected') {
       setBundle(null);
+      setCompanionLive2DState(null);
       setListening(false);
       setSpeaking(false);
       bundleRetryCountRef.current = 0;
@@ -1369,6 +1475,14 @@ export default function App() {
   }
 
   function handleCompanionEvent(message: RelayMessage) {
+    if (message.type === 'companion.snapshot' || message.type === 'companion.snapshot.updated') {
+      applyCompanionLive2DState(message.payload);
+      return;
+    }
+    if (message.type === 'companion.live2d.state' || message.type === 'live2d.state') {
+      applyCompanionLive2DState(message.payload || message);
+      return;
+    }
     if (message.type === 'chat.history') {
       const historyEmotion = detectLatestAssistantHistoryEmotion(message.payload);
       setChatHistory(normalizeHistory(message.payload, language));
@@ -1376,7 +1490,9 @@ export default function App() {
       return;
     }
     if (message.type === 'live2d.expression') {
-      applyMobileEmotion((message.payload as Record<string, unknown> | undefined)?.emotion || message.emotion, 'neutral');
+      const payload = message.payload as Record<string, unknown> | undefined;
+      applyCompanionLive2DState(payload || message);
+      applyMobileEmotion(payload?.emotion || message.emotion, 'neutral');
       return;
     }
     if (message.type === 'tts.audio') {
@@ -1386,6 +1502,7 @@ export default function App() {
     }
     if (message.type === 'live2d.speech') {
       const payload = (message.payload || {}) as Record<string, unknown>;
+      if (payload.live2d) applyCompanionLive2DState(payload);
       const source = payload.source === 'listening' || payload.listening === true ? 'listening' : 'speaking';
       const payloadEmotion = normalizeMobileEmotion(payload.emotion)
         || detectMobileEmotionFromText(`${payload.text || ''}\n${payload.subtitle || ''}`);
@@ -1963,6 +2080,7 @@ export default function App() {
         language={language}
         emotion={emotion}
         emotionTrigger={emotionTrigger}
+        companionState={companionLive2DState}
         speaking={speaking}
         listening={listening || recording || transcribing}
         audioLevel={audioLevel}

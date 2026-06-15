@@ -47,6 +47,32 @@ export type CompanionSnapshot = {
   provider: string;
   ttsEnabled: boolean;
   visionEnabled: boolean;
+  live2d?: CompanionLive2DState;
+};
+
+export type CompanionLive2DAction = {
+  stateId?: string;
+  kind: 'expression' | 'motion';
+  value: string;
+  intervalMs?: number;
+};
+
+export type CompanionLive2DState = {
+  currentStateId?: string;
+  currentStateName?: string;
+  stateEnabled?: boolean;
+  stateMode?: string;
+  live2dAction?: CompanionLive2DAction | null;
+  expressionMap?: Record<string, string>;
+  motionMap?: Record<string, string>;
+  expressionPreset?: string;
+  motionPreset?: string;
+  autoExpressionsEnabled?: boolean;
+  autoMotionsEnabled?: boolean;
+  emotion?: string;
+  expression?: string;
+  motion?: string;
+  updatedAt?: number;
 };
 
 export type CompanionTtsAudio = {

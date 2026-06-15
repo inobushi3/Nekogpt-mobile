@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from 'react';
 import type { AppLanguage } from '../i18n';
 import { t } from '../i18n';
-import type { Live2DBundle, Live2DTouchPayload } from '../types';
+import type {
+  CompanionLive2DAction,
+  CompanionLive2DState,
+  Live2DBundle,
+  Live2DTouchPayload,
+} from '../types';
 import { loadModelBundle } from '../live2d/modelBundle';
 import { loadLive2DRuntime } from '../live2d/runtime';
 
@@ -11,6 +16,7 @@ type Live2DStageProps = {
   language: AppLanguage;
   emotion: string;
   emotionTrigger?: number;
+  companionState?: CompanionLive2DState | null;
   speaking: boolean;
   listening?: boolean;
   audioLevel: number;
@@ -37,6 +43,8 @@ const PARAMETER_IDS = {
   bodyZ: ['ParamBodyAngleZ', 'PARAM_BODY_ANGLE_Z'],
   eyeBallX: ['ParamEyeBallX', 'PARAM_EYE_BALL_X'],
   eyeBallY: ['ParamEyeBallY', 'PARAM_EYE_BALL_Y'],
+  eyeLOpen: ['ParamEyeLOpen', 'PARAM_EYE_L_OPEN', 'ParamEyeLeftOpen', 'EyeLOpen', 'LeftEyeOpen'],
+  eyeROpen: ['ParamEyeROpen', 'PARAM_EYE_R_OPEN', 'ParamEyeRightOpen', 'EyeROpen', 'RightEyeOpen'],
   browLY: ['ParamBrowLY', 'PARAM_BROW_L_Y'],
   browRY: ['ParamBrowRY', 'PARAM_BROW_R_Y'],
   breath: ['ParamBreath', 'PARAM_BREATH'],
@@ -180,6 +188,50 @@ function getMotionDefinitions(model: any): Record<string, unknown[]> {
   return definitions && typeof definitions === 'object' ? definitions as Record<string, unknown[]> : {};
 }
 
+function findNamedMotionTarget(model: any, preset: string) {
+  const normalizedPreset = normalizeLive2DKey(preset);
+  if (!normalizedPreset) return null;
+  const definitions = getMotionDefinitions(model);
+  const groups = Object.keys(definitions);
+  for (const group of groups) {
+    const normalizedGroup = normalizeLive2DKey(group);
+    if (
+      normalizedGroup === normalizedPreset
+      || normalizedGroup.includes(normalizedPreset)
+      || normalizedPreset.includes(normalizedGroup)
+    ) {
+      return { group, index: 0 };
+    }
+    const groupDefinitions = Array.isArray(definitions[group]) ? definitions[group] : [];
+    const index = groupDefinitions.findIndex((definition) => definitionMatches(definition, [normalizedPreset]));
+    if (index >= 0) return { group, index };
+  }
+  return null;
+}
+
+async function applyModelNamedMotion(model: any, preset: string) {
+  if (typeof model?.motion !== 'function') return false;
+  const target = findNamedMotionTarget(model, preset);
+  if (!target) return false;
+  try {
+    const result = await model.motion(target.group, target.index, LIVE2D_FORCE_PRIORITY, { resetExpression: false });
+    return result !== false;
+  } catch {
+    return false;
+  }
+}
+
+function getMappedLive2DSignalValue(mapping: Record<string, string> | undefined, signal: string) {
+  const normalizedSignal = normalizeLive2DKey(signal);
+  if (!mapping || !normalizedSignal) return '';
+  for (const [key, value] of Object.entries(mapping)) {
+    if (normalizeLive2DKey(key) !== normalizedSignal) continue;
+    const cleanValue = String(value || '').trim();
+    if (cleanValue) return cleanValue;
+  }
+  return '';
+}
+
 function findEmotionMotionTarget(model: any, emotion: string) {
   const candidates = emotionCandidates(emotion);
   if (!candidates.length) return null;
@@ -287,6 +339,7 @@ export function Live2DStage({
   language,
   emotion,
   emotionTrigger = 0,
+  companionState = null,
   speaking,
   listening = false,
   audioLevel,
@@ -306,7 +359,11 @@ export function Live2DStage({
   const lastGestureRef = useRef<{ x: number; y: number; distance: number } | null>(null);
   const lastTapRef = useRef<{ at: number; x: number; y: number } | null>(null);
   const lastAppliedEmotionRef = useRef('');
-  const liveStateRef = useRef({ emotion, speaking, listening, audioLevel });
+  const lastCompanionActionKeyRef = useRef('');
+  const companionActionTimerRef = useRef<number | null>(null);
+  const companionActionTokenRef = useRef(0);
+  const companionStateRef = useRef<CompanionLive2DState | null>(companionState);
+  const liveStateRef = useRef({ emotion, companionState, speaking, listening, audioLevel });
   const frameStateRef = useRef({ mouth: 0, speaking: 0, listening: 0 });
   const [status, setStatus] = useState(t(language, 'live2d.status.waiting'));
   const [dragging, setDragging] = useState(false);
@@ -317,7 +374,78 @@ export function Live2DStage({
     affectionate: boolean;
   } | null>(null);
 
-  liveStateRef.current = { emotion, speaking, listening, audioLevel };
+  companionStateRef.current = companionState;
+  liveStateRef.current = { emotion, companionState, speaking, listening, audioLevel };
+
+  function clearCompanionActionTimer() {
+    if (companionActionTimerRef.current === null) return;
+    window.clearTimeout(companionActionTimerRef.current);
+    companionActionTimerRef.current = null;
+  }
+
+  function getCompanionStateAction(state = companionStateRef.current): CompanionLive2DAction | null {
+    if (!state || state.stateEnabled === false) return null;
+    const action = state.live2dAction;
+    if (!action || (action.kind !== 'expression' && action.kind !== 'motion')) return null;
+    const value = String(action.value || '').trim();
+    if (!value) return null;
+    return {
+      ...action,
+      value,
+      intervalMs: Math.min(30_000, Math.max(1500, Number(action.intervalMs) || 10_000)),
+    };
+  }
+
+  function getCompanionStateActionKey(state = companionStateRef.current) {
+    const action = getCompanionStateAction(state);
+    if (!action) return '';
+    return [
+      state?.currentStateId || action.stateId || '',
+      action.kind,
+      action.value,
+      action.intervalMs || 10_000,
+    ].join(':');
+  }
+
+  async function applyCompanionStateAction(action: CompanionLive2DAction) {
+    const model = modelRef.current;
+    if (!model) return false;
+    if (action.kind === 'expression') return applyModelExpression(model, action.value);
+    return applyModelNamedMotion(model, action.value);
+  }
+
+  function stopCompanionStateActionLoop() {
+    companionActionTokenRef.current += 1;
+    clearCompanionActionTimer();
+    lastCompanionActionKeyRef.current = '';
+  }
+
+  function startCompanionStateActionLoop(force = false) {
+    const model = modelRef.current;
+    const state = companionStateRef.current;
+    const action = getCompanionStateAction(state);
+    if (!model || !action) {
+      stopCompanionStateActionLoop();
+      return;
+    }
+
+    const actionKey = getCompanionStateActionKey(state);
+    if (!force && lastCompanionActionKeyRef.current === actionKey && companionActionTimerRef.current !== null) return;
+    lastCompanionActionKeyRef.current = actionKey;
+    companionActionTokenRef.current += 1;
+    const token = companionActionTokenRef.current;
+    clearCompanionActionTimer();
+
+    const run = () => {
+      if (token !== companionActionTokenRef.current || model !== modelRef.current) return;
+      void applyCompanionStateAction(action).finally(() => {
+        if (token !== companionActionTokenRef.current || model !== modelRef.current) return;
+        companionActionTimerRef.current = window.setTimeout(run, action.intervalMs || 10_000);
+      });
+    };
+
+    run();
+  }
 
   function applyLive2DEmotionSignal(rawEmotion: string, force = false) {
     const normalizedEmotion = normalizeLive2DKey(rawEmotion);
@@ -325,6 +453,11 @@ export function Live2DStage({
     if (!model || !normalizedEmotion || (!force && lastAppliedEmotionRef.current === normalizedEmotion)) return;
     lastAppliedEmotionRef.current = normalizedEmotion;
     void (async () => {
+      const state = companionStateRef.current;
+      const mappedMotion = getMappedLive2DSignalValue(state?.motionMap, normalizedEmotion);
+      if (mappedMotion && await applyModelNamedMotion(model, mappedMotion)) return;
+      const mappedExpression = getMappedLive2DSignalValue(state?.expressionMap, normalizedEmotion);
+      if (mappedExpression && await applyModelExpression(model, mappedExpression)) return;
       await applyModelEmotionMotion(model, normalizedEmotion);
       await applyModelExpression(model, normalizedEmotion);
     })();
@@ -334,7 +467,11 @@ export function Live2DStage({
     const state = liveStateRef.current;
     const frame = frameStateRef.current;
     const now = performance.now() / 1000;
-    const normalizedEmotion = state.emotion.toLowerCase();
+    const normalizedEmotion = normalizeLive2DKey(
+      state.companionState?.emotion
+      || state.companionState?.expression
+      || state.emotion
+    );
     const smile = /happy|joy|love|excited|feliz|amor/.test(normalizedEmotion) ? 0.85 : 0;
     const worried = /sad|fear|triste|medo/.test(normalizedEmotion) ? -0.65 : 0;
     const angry = /angry|brava|raiva/.test(normalizedEmotion) ? -0.4 : 0;
@@ -353,24 +490,35 @@ export function Live2DStage({
     const active = Math.max(speak, listen);
     const speakNod = Math.sin(now * 8.5) * speak;
     const listenSway = Math.sin(now * 2.6) * listen;
-    const breath = 0.5 + Math.sin(now * 2.1) * 0.18;
+    const idleWeight = clamp(1 - active * 0.42, 0.45, 1);
+    const idleSlow = Math.sin(now * 1.35);
+    const idleTiny = Math.sin(now * 0.72 + 1.6);
+    const breathWave = Math.sin(now * 2.05);
+    const breath = 0.52 + breathWave * 0.24;
+    const blinkPhase = (now * 1000) % 4650;
+    const blinkCloseMs = 72;
+    const blinkOpenMs = 96;
+    const blinkValue = blinkPhase < blinkCloseMs
+      ? 1 - blinkPhase / blinkCloseMs
+      : blinkPhase < blinkCloseMs + blinkOpenMs
+        ? (blinkPhase - blinkCloseMs) / blinkOpenMs
+        : 1;
 
     setParameters(model, PARAMETER_IDS.mouthOpen, frame.mouth, 1);
+    setParameters(model, PARAMETER_IDS.eyeLOpen, blinkValue, 0.65);
+    setParameters(model, PARAMETER_IDS.eyeROpen, blinkValue, 0.65);
     addParameters(model, PARAMETER_IDS.mouthForm, smile + worried * 0.25, 0.8);
     addParameters(model, PARAMETER_IDS.browLY, worried + angry, 0.65);
     addParameters(model, PARAMETER_IDS.browRY, worried + angry, 0.65);
-    addParameters(model, PARAMETER_IDS.breath, breath, 0.55);
-
-    if (active > 0.01) {
-      addParameters(model, PARAMETER_IDS.angleX, listenSway * 6 + Math.sin(now * 4.2) * 1.4 * speak, active);
-      addParameters(model, PARAMETER_IDS.angleY, Math.sin(now * 3.1) * 2.8 * listen + speakNod * 1.8, active);
-      addParameters(model, PARAMETER_IDS.angleZ, Math.sin(now * 2.1) * 3.4 * listen + Math.sin(now * 5.8) * 1.2 * speak, active);
-      addParameters(model, PARAMETER_IDS.bodyX, listenSway * 3.2 + Math.sin(now * 3.8) * 1.1 * speak, active);
-      addParameters(model, PARAMETER_IDS.bodyY, Math.sin(now * 2.4) * 1.7 * listen + Math.abs(speakNod) * 0.8, active);
-      addParameters(model, PARAMETER_IDS.bodyZ, Math.sin(now * 1.8) * 2.2 * listen, active);
-      addParameters(model, PARAMETER_IDS.eyeBallX, Math.sin(now * 1.9) * 0.22 * listen, active);
-      addParameters(model, PARAMETER_IDS.eyeBallY, 0.08 * listen + Math.sin(now * 2.8) * 0.06 * speak, active);
-    }
+    addParameters(model, PARAMETER_IDS.breath, breath, 0.75);
+    addParameters(model, PARAMETER_IDS.angleX, idleSlow * 1.4 * idleWeight + listenSway * 6 + Math.sin(now * 4.2) * 1.4 * speak, 0.78);
+    addParameters(model, PARAMETER_IDS.angleY, breathWave * 0.75 * idleWeight + Math.sin(now * 3.1) * 2.8 * listen + speakNod * 1.8, 0.72);
+    addParameters(model, PARAMETER_IDS.angleZ, idleTiny * 1.1 * idleWeight + Math.sin(now * 2.1) * 3.4 * listen + Math.sin(now * 5.8) * 1.2 * speak, 0.72);
+    addParameters(model, PARAMETER_IDS.bodyX, idleSlow * 0.85 * idleWeight + listenSway * 3.2 + Math.sin(now * 3.8) * 1.1 * speak, 0.68);
+    addParameters(model, PARAMETER_IDS.bodyY, breathWave * 0.95 * idleWeight + Math.sin(now * 2.4) * 1.7 * listen + Math.abs(speakNod) * 0.8, 0.65);
+    addParameters(model, PARAMETER_IDS.bodyZ, idleTiny * 0.65 * idleWeight + Math.sin(now * 1.8) * 2.2 * listen, 0.62);
+    addParameters(model, PARAMETER_IDS.eyeBallX, Math.sin(now * 0.85) * 0.08 * idleWeight + Math.sin(now * 1.9) * 0.22 * listen, 0.55);
+    addParameters(model, PARAMETER_IDS.eyeBallY, Math.sin(now * 0.68 + 0.4) * 0.04 * idleWeight + 0.08 * listen + Math.sin(now * 2.8) * 0.06 * speak, 0.5);
   }
 
   function applyTransform() {
@@ -570,8 +718,28 @@ export function Live2DStage({
   }
 
   useEffect(() => {
-    applyLive2DEmotionSignal(emotion, emotionTrigger > 0);
-  }, [emotion, emotionTrigger]);
+    applyLive2DEmotionSignal(
+      companionState?.emotion || companionState?.expression || emotion,
+      emotionTrigger > 0
+    );
+  }, [emotion, emotionTrigger, companionState?.emotion, companionState?.expression]);
+
+  useEffect(() => {
+    const motion = String(companionState?.motion || '').trim();
+    const model = modelRef.current;
+    if (!motion || !model) return;
+    void applyModelNamedMotion(model, motion);
+  }, [companionState?.motion]);
+
+  useEffect(() => {
+    startCompanionStateActionLoop();
+  }, [
+    companionState?.stateEnabled,
+    companionState?.currentStateId,
+    companionState?.live2dAction?.kind,
+    companionState?.live2dAction?.value,
+    companionState?.live2dAction?.intervalMs,
+  ]);
 
   useEffect(() => {
     if (!bundle || !containerRef.current || !canvasRef.current) return;
@@ -631,7 +799,12 @@ export function Live2DStage({
         resizeObserver.observe(containerRef.current!);
         setStatus('');
         lastAppliedEmotionRef.current = '';
-        applyLive2DEmotionSignal(liveStateRef.current.emotion);
+        applyLive2DEmotionSignal(
+          companionStateRef.current?.emotion
+          || companionStateRef.current?.expression
+          || liveStateRef.current.emotion
+        );
+        startCompanionStateActionLoop(true);
         onLoaded?.();
       } catch (error) {
         const message = error instanceof Error ? error.message : t(language, 'live2d.error.load');
@@ -647,6 +820,7 @@ export function Live2DStage({
         modelRef.current?.internalModel?.off?.('beforeModelUpdate', beforeModelUpdateHandler);
         modelRef.current?.internalModel?.removeListener?.('beforeModelUpdate', beforeModelUpdateHandler);
       }
+      stopCompanionStateActionLoop();
       modelRef.current?.destroy?.({ children: true });
       modelRef.current = null;
       appRef.current = null;
