@@ -360,6 +360,42 @@ async function startModelMotion(model: any, target: { group: string; index: numb
   return false;
 }
 
+function findOriginalIdleMotionGroup(model: any) {
+  const motionManager = model?.internalModel?.motionManager;
+  const configuredGroup = String(motionManager?.groups?.idle || '').trim();
+  if (configuredGroup) return configuredGroup;
+
+  const definitions = getMotionDefinitions(model);
+  return Object.keys(definitions).find((group) => normalizeLive2DKey(group) === 'idle') || '';
+}
+
+function requestOriginalIdleMotion(model: any) {
+  const motionManager = model?.internalModel?.motionManager;
+  if (!motionManager) return;
+
+  const idleGroup = findOriginalIdleMotionGroup(model);
+  if (!idleGroup) return;
+
+  const state = motionManager.state;
+  try {
+    if (
+      typeof state?.shouldRequestIdleMotion === 'function'
+      && state.shouldRequestIdleMotion() !== true
+    ) {
+      return;
+    }
+  } catch {
+    // Let the runtime decide if its motion state is not inspectable.
+  }
+
+  try {
+    const result = motionManager.startRandomMotion?.(idleGroup, 1);
+    void Promise.resolve(result).catch(() => undefined);
+  } catch {
+    // Models without a runnable idle group keep their default pose.
+  }
+}
+
 async function applyModelNamedMotion(model: any, preset: string) {
   const target = findNamedMotionTarget(model, preset);
   if (!target) return false;
@@ -395,15 +431,9 @@ function findEmotionMotionTarget(model: any, emotion: string) {
 }
 
 async function applyModelEmotionMotion(model: any, emotion: string) {
-  if (typeof model?.motion !== 'function') return false;
   const target = findEmotionMotionTarget(model, emotion);
   if (!target) return false;
-  try {
-    const result = await model.motion(target.group, target.index, LIVE2D_FORCE_PRIORITY, { resetExpression: false });
-    return result !== false;
-  } catch {
-    return false;
-  }
+  return startModelMotion(model, target);
 }
 
 function normalizeParameterId(value: unknown) {
@@ -831,15 +861,6 @@ export function Live2DStage({
     frame.lastFrameAt = nowMs;
     const speakingConfig = getAudioMotionSettings(state.companionState, 'speaking');
     const listeningConfig = getAudioMotionSettings(state.companionState, 'listening');
-    const normalizedEmotion = normalizeLive2DKey(
-      state.companionState?.emotion
-      || state.companionState?.expression
-      || state.emotion
-    );
-    const smile = /happy|joy|love|excited|feliz|amor/.test(normalizedEmotion) ? 0.85 : 0;
-    const eyeSmile = /happy|joy|love|excited|laugh|hearteyes|heartbox/.test(normalizedEmotion) ? 0.55 : 0;
-    const worried = /sad|fear|triste|medo/.test(normalizedEmotion) ? -0.65 : 0;
-    const angry = /angry|brava|raiva/.test(normalizedEmotion) ? -0.4 : 0;
     const targetSpeaking = state.speaking ? 1 : 0;
     const targetListening = state.listening && !state.speaking ? 1 : 0;
     const targetMouth = state.speaking
@@ -868,39 +889,14 @@ export function Live2DStage({
 
     const speak = speakingConfig.enabled ? frame.speaking * speakingConfig.intensity : 0;
     const listen = listeningConfig.enabled ? frame.listening * listeningConfig.intensity : 0;
-    const active = Math.max(speak, listen);
-    const speakNod = Math.sin(now * 4.25 * speakingConfig.speed) * speak;
-    const listenSway = Math.sin(now * 1.85 * listeningConfig.speed) * listen;
-    const idleWeight = clamp(1 - active * 0.42, 0.45, 1);
-    const idleSlow = Math.sin(now * 1.35);
-    const idleTiny = Math.sin(now * 0.72 + 1.6);
-    const breathWave = Math.sin(now * 2.05);
-    const breath = 0.52 + breathWave * 0.24;
-    const blinkPhase = (now * 1000) % 4650;
-    const blinkCloseMs = 72;
-    const blinkOpenMs = 96;
-    const blinkValue = blinkPhase < blinkCloseMs
-      ? 1 - blinkPhase / blinkCloseMs
-      : blinkPhase < blinkCloseMs + blinkOpenMs
-        ? (blinkPhase - blinkCloseMs) / blinkOpenMs
-        : 1;
+    const activeVoiceMotion = Math.max(speak, listen, frame.speakingVolume, frame.listeningVolume);
 
-    setParameters(model, PARAMETER_IDS.mouthOpen, frame.mouth, 1);
-    setParameters(model, PARAMETER_IDS.eyeLOpen, blinkValue, 0.65);
-    setParameters(model, PARAMETER_IDS.eyeROpen, blinkValue, 0.65);
-    addParameters(model, PARAMETER_IDS.mouthForm, smile + worried * 0.25, 0.8);
-    addParameters(model, PARAMETER_IDS.browLY, worried + angry, 0.65);
-    addParameters(model, PARAMETER_IDS.browRY, worried + angry, 0.65);
-    addParameters(model, PARAMETER_IDS.eyeSmile, eyeSmile, 0.55);
-    addParameters(model, PARAMETER_IDS.breath, breath, 0.75);
-    addParameters(model, PARAMETER_IDS.angleX, idleSlow * 4.8 * idleWeight + listenSway * 7.5 + Math.sin(now * 4.2) * 2.6 * speak, 0.9);
-    addParameters(model, PARAMETER_IDS.angleY, breathWave * 2.3 * idleWeight + Math.sin(now * 3.1) * 3.4 * listen + speakNod * 2.4, 0.85);
-    addParameters(model, PARAMETER_IDS.angleZ, idleTiny * 3.2 * idleWeight + Math.sin(now * 2.1) * 4.1 * listen + Math.sin(now * 5.8) * 1.8 * speak, 0.84);
-    addParameters(model, PARAMETER_IDS.bodyX, idleSlow * 3.8 * idleWeight + listenSway * 4.3 + Math.sin(now * 3.8) * 1.8 * speak, 0.78);
-    addParameters(model, PARAMETER_IDS.bodyY, breathWave * 2.4 * idleWeight + Math.sin(now * 2.4) * 2.3 * listen + Math.abs(speakNod) * 1.1, 0.75);
-    addParameters(model, PARAMETER_IDS.bodyZ, idleTiny * 2.6 * idleWeight + Math.sin(now * 1.8) * 2.8 * listen, 0.72);
-    addParameters(model, PARAMETER_IDS.eyeBallX, Math.sin(now * 0.85) * 0.18 * idleWeight + Math.sin(now * 1.9) * 0.26 * listen, 0.65);
-    addParameters(model, PARAMETER_IDS.eyeBallY, Math.sin(now * 0.68 + 0.4) * 0.08 * idleWeight + 0.1 * listen + Math.sin(now * 2.8) * 0.08 * speak, 0.58);
+    if (state.speaking || frame.mouth > 0.005) {
+      setParameters(model, PARAMETER_IDS.mouthOpen, frame.mouth, 1);
+    }
+
+    if (activeVoiceMotion <= 0.005) return;
+
     applyAudioMotionOscillators(
       model,
       LIVE2D_AUDIO_MOTION_OSCILLATORS_SPEAKING,
@@ -1184,6 +1180,7 @@ export function Live2DStage({
           autoUpdate: true,
           autoFocus: false,
           autoHitTest: false,
+          motionPreload: (engine as any).MotionPreloadStrategy?.IDLE ?? 'IDLE',
         });
         if (disposed) {
           model.destroy?.({ children: true });
@@ -1205,6 +1202,7 @@ export function Live2DStage({
         resizeObserver.observe(containerRef.current!);
         setStatus('');
         lastAppliedEmotionRef.current = '';
+        requestOriginalIdleMotion(model);
         applyLive2DEmotionSignal(
           companionStateRef.current?.emotion
           || companionStateRef.current?.expression
