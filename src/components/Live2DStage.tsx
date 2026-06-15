@@ -216,6 +216,9 @@ type Live2DParameterRef = {
   index: number | null;
 };
 
+const live2DParameterIdsCache = new WeakMap<object, string[]>();
+const live2DParameterRefCache = new WeakMap<object, Map<string, Live2DParameterRef | null>>();
+
 function normalizeLive2DKey(value: unknown) {
   return String(value || '')
     .toLowerCase()
@@ -276,37 +279,91 @@ function getMotionDefinitions(model: any): Record<string, unknown[]> {
   return definitions && typeof definitions === 'object' ? definitions as Record<string, unknown[]> : {};
 }
 
+function parseMotionPreset(value: string) {
+  const separatorIndex = value.indexOf('::');
+  if (separatorIndex < 0) return { group: '', query: value.trim() };
+
+  return {
+    group: value.slice(0, separatorIndex).trim(),
+    query: value.slice(separatorIndex + 2).trim(),
+  };
+}
+
+function motionDefinitionMatches(definition: unknown, index: number, query: string) {
+  const normalizedQuery = normalizeLive2DKey(query);
+  if (!normalizedQuery) return index === 0;
+  if (normalizeLive2DKey(String(index)) === normalizedQuery || normalizeLive2DKey(String(index + 1)) === normalizedQuery) {
+    return true;
+  }
+  return definitionMatches(definition, [normalizedQuery]);
+}
+
 function findNamedMotionTarget(model: any, preset: string) {
-  const normalizedPreset = normalizeLive2DKey(preset);
-  if (!normalizedPreset) return null;
+  const { group, query } = parseMotionPreset(preset);
+  const normalizedGroup = normalizeLive2DKey(group);
+  const normalizedQuery = normalizeLive2DKey(query);
+  if (!normalizedGroup && !normalizedQuery) return null;
   const definitions = getMotionDefinitions(model);
-  const groups = Object.keys(definitions);
-  for (const group of groups) {
-    const normalizedGroup = normalizeLive2DKey(group);
-    if (
-      normalizedGroup === normalizedPreset
-      || normalizedGroup.includes(normalizedPreset)
-      || normalizedPreset.includes(normalizedGroup)
-    ) {
-      return { group, index: 0 };
+  const entries = Object.entries(definitions);
+  const candidates = normalizedGroup
+    ? entries.filter(([candidateGroup]) => normalizeLive2DKey(candidateGroup) === normalizedGroup)
+    : entries;
+
+  for (const [candidateGroup, groupDefinitions] of candidates) {
+    const motions = Array.isArray(groupDefinitions) ? groupDefinitions : [];
+    const candidateGroupKey = normalizeLive2DKey(candidateGroup);
+    if (!normalizedQuery && motions.length && (
+      !normalizedGroup
+      || candidateGroupKey === normalizedGroup
+      || candidateGroupKey.includes(normalizedGroup)
+      || normalizedGroup.includes(candidateGroupKey)
+    )) {
+      return { group: candidateGroup, index: 0 };
     }
-    const groupDefinitions = Array.isArray(definitions[group]) ? definitions[group] : [];
-    const index = groupDefinitions.findIndex((definition) => definitionMatches(definition, [normalizedPreset]));
-    if (index >= 0) return { group, index };
+
+    const index = motions.findIndex((definition, definitionIndex) => motionDefinitionMatches(definition, definitionIndex, query));
+    if (index >= 0) return { group: candidateGroup, index };
   }
   return null;
 }
 
+async function startModelMotion(model: any, target: { group: string; index: number }) {
+  const motionManager = model?.internalModel?.motionManager;
+  const options = { resetExpression: false };
+  try {
+    await motionManager?.loadMotion?.(target.group, target.index);
+  } catch {
+    // Some runtimes load lazily inside startMotion.
+  }
+
+  const starters = [
+    typeof model?.motion === 'function'
+      ? () => model.motion(target.group, target.index, LIVE2D_FORCE_PRIORITY, options)
+      : null,
+    typeof motionManager?.startMotion === 'function'
+      ? () => motionManager.startMotion(target.group, target.index, LIVE2D_FORCE_PRIORITY, options)
+      : null,
+    typeof motionManager?.manager?.startMotion === 'function'
+      ? () => motionManager.manager.startMotion(target.group, target.index, LIVE2D_FORCE_PRIORITY, options)
+      : null,
+  ].filter((start): start is () => unknown => typeof start === 'function');
+
+  for (const start of starters) {
+    try {
+      const result = await start();
+      if (result !== false) return true;
+    } catch {
+      // Try the next runtime entry point.
+    }
+  }
+
+  return false;
+}
+
 async function applyModelNamedMotion(model: any, preset: string) {
-  if (typeof model?.motion !== 'function') return false;
   const target = findNamedMotionTarget(model, preset);
   if (!target) return false;
-  try {
-    const result = await model.motion(target.group, target.index, LIVE2D_FORCE_PRIORITY, { resetExpression: false });
-    return result !== false;
-  } catch {
-    return false;
-  }
+  return startModelMotion(model, target);
 }
 
 function getMappedLive2DSignalValue(mapping: Record<string, string> | undefined, signal: string) {
@@ -385,6 +442,11 @@ function live2DIdToString(value: unknown): string {
 }
 
 function getLive2DParameterIds(coreModel: any) {
+  if (coreModel && typeof coreModel === 'object') {
+    const cached = live2DParameterIdsCache.get(coreModel);
+    if (cached) return cached;
+  }
+
   const ids: string[] = [];
   const addId = (value: unknown) => {
     const id = live2DIdToString(value).trim();
@@ -416,6 +478,9 @@ function getLive2DParameterIds(coreModel: any) {
   addIds(coreModel?.parameterIds);
   addIds(coreModel?._model?._parameterIds);
   addIds(coreModel?._model?.parameters?.ids);
+  if (ids.length && coreModel && typeof coreModel === 'object') {
+    live2DParameterIdsCache.set(coreModel, ids);
+  }
   return ids;
 }
 
@@ -454,6 +519,21 @@ function getLive2DParameterIndex(coreModel: any, internalModel: any, id: string)
 function resolveParameter(model: any, id: string): Live2DParameterRef | null {
   const coreModel = getCoreLive2DModel(model);
   if (!coreModel || !id) return null;
+  const cacheKey = normalizeParameterId(id);
+  if (coreModel && typeof coreModel === 'object') {
+    let cache = live2DParameterRefCache.get(coreModel);
+    if (!cache) {
+      cache = new Map();
+      live2DParameterRefCache.set(coreModel, cache);
+    }
+    if (cache.has(cacheKey)) return cache.get(cacheKey) || null;
+    const resolved = {
+      id,
+      index: getLive2DParameterIndex(coreModel, model?.internalModel, id),
+    };
+    cache.set(cacheKey, resolved);
+    return resolved;
+  }
   return {
     id,
     index: getLive2DParameterIndex(coreModel, model?.internalModel, id),

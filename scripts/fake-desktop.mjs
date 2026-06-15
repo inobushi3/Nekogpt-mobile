@@ -14,6 +14,10 @@ const modelId = process.env.NEKO_MODEL_ID || path.basename(modelRoot).toLowerCas
 const modelName = process.env.NEKO_MODEL_NAME || path.basename(modelRoot)
 const relayUrl = process.env.NEKO_RELAY_URL || 'ws://127.0.0.1:8787/connect'
 const room = (process.env.NEKO_ROOM || 'TEST42').toUpperCase()
+const live2dActionKind = process.env.NEKO_LIVE2D_ACTION_KIND === 'motion' ? 'motion' : 'expression'
+const live2dActionValue = process.env.NEKO_LIVE2D_ACTION_VALUE
+  || (live2dActionKind === 'motion' ? 'Idle::Idle.motion3.json' : 'Exp1')
+const live2dActionIntervalMs = Math.max(1500, Math.min(30_000, Number(process.env.NEKO_LIVE2D_ACTION_INTERVAL_MS) || 2500))
 
 async function collectModelFiles(root, modelFile) {
   const output = {}
@@ -33,9 +37,11 @@ async function collectModelFiles(root, modelFile) {
     }
     const info = await stat(absolute).catch(() => null)
     if (!info?.isFile()) continue
-    const bytes = new Uint8Array(await readFile(absolute))
-    output[relativeFromRoot] = bytes
-    if (!relativeFromRoot.toLowerCase().endsWith('.json')) continue
+    let bytes = new Uint8Array(await readFile(absolute))
+    if (!relativeFromRoot.toLowerCase().endsWith('.json')) {
+      output[relativeFromRoot] = bytes
+      continue
+    }
 
     const baseDir = path.dirname(relativeFromRoot)
     const visit = (value) => {
@@ -58,7 +64,21 @@ async function collectModelFiles(root, modelFile) {
       }
       if (value && typeof value === 'object') Object.values(value).forEach(visit)
     }
-    visit(JSON.parse(new TextDecoder().decode(bytes)))
+    const document = JSON.parse(new TextDecoder().decode(bytes))
+    if (
+      live2dActionKind === 'motion'
+      && relativeFromRoot === modelFile
+      && !document?.FileReferences?.Motions
+      && output['Idle.motion3.json'] === undefined
+    ) {
+      document.FileReferences = document.FileReferences || {}
+      document.FileReferences.Motions = {
+        Idle: [{ File: 'Idle.motion3.json' }],
+      }
+      bytes = new TextEncoder().encode(JSON.stringify(document))
+    }
+    output[relativeFromRoot] = bytes
+    visit(document)
   }
 
   return output
@@ -107,9 +127,9 @@ function live2dSnapshot(emotion = 'happy') {
     stateMode: 'manual',
     live2dAction: {
       stateId: 'testing-happy',
-      kind: 'expression',
-      value: 'Exp1',
-      intervalMs: 2500,
+      kind: live2dActionKind,
+      value: live2dActionValue,
+      intervalMs: live2dActionIntervalMs,
     },
     expressionMap: {
       happy: 'Exp1',
