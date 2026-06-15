@@ -6,7 +6,12 @@ import WebSocket from 'ws'
 
 const mobileRoot = process.cwd()
 const desktopRoot = path.resolve(mobileRoot, '..', 'waifuprogramming-experiencia')
-const modelRoot = path.join(desktopRoot, 'live2d-models', 'catgpt')
+const modelRoot = process.env.NEKO_MODEL_ROOT
+  ? path.resolve(process.env.NEKO_MODEL_ROOT)
+  : path.join(desktopRoot, 'public', 'onboarding-guide', 'live2d', 'dororong', 'Doro')
+const modelFile = process.env.NEKO_MODEL_FILE || 'Doro.model3.json'
+const modelId = process.env.NEKO_MODEL_ID || path.basename(modelRoot).toLowerCase()
+const modelName = process.env.NEKO_MODEL_NAME || path.basename(modelRoot)
 const relayUrl = process.env.NEKO_RELAY_URL || 'ws://127.0.0.1:8787/connect'
 const room = (process.env.NEKO_ROOM || 'TEST42').toUpperCase()
 
@@ -59,7 +64,7 @@ async function collectModelFiles(root, modelFile) {
   return output
 }
 
-const modelZip = Buffer.from(zipSync(await collectModelFiles(modelRoot, 'catgpt.model3.json'), { level: 1 }))
+const modelZip = Buffer.from(zipSync(await collectModelFiles(modelRoot, modelFile), { level: 1 }))
 const encodedModel = modelZip.toString('base64')
 const chunkSize = 96 * 1024
 const totalChunks = Math.max(1, Math.ceil(encodedModel.length / chunkSize))
@@ -94,8 +99,49 @@ function sendBundle(transferId) {
   }
 }
 
+function live2dSnapshot(emotion = 'happy') {
+  return {
+    currentStateId: 'testing-happy',
+    currentStateName: 'Testing Happy',
+    stateEnabled: true,
+    stateMode: 'manual',
+    live2dAction: {
+      stateId: 'testing-happy',
+      kind: 'expression',
+      value: 'Exp1',
+      intervalMs: 2500,
+    },
+    expressionMap: {
+      happy: 'Exp1',
+      surprised: 'Exp3',
+      shy: 'Exp5',
+      love: 'TongueOut',
+    },
+    motionMap: {},
+    expressionPreset: '',
+    motionPreset: '',
+    autoExpressionsEnabled: true,
+    autoMotionsEnabled: true,
+    maxFps: 60,
+    speakingMotionEnabled: true,
+    speakingMotionIntensity: 0.8,
+    speakingMotionSpeed: 2,
+    speakingMotionBodyFollow: 0.5,
+    speakingMotionVolumeThreshold: 0.02,
+    speakingMotionSmoothing: 0.85,
+    listeningMotionEnabled: true,
+    listeningMotionIntensity: 0.8,
+    listeningMotionSpeed: 1.4,
+    listeningMotionBodyFollow: 0.4,
+    listeningMotionVolumeThreshold: 0.008,
+    listeningMotionSmoothing: 0.88,
+    emotion,
+    updatedAt: Date.now(),
+  }
+}
+
 socket.on('open', () => {
-  console.log(`Fake desktop online: room=${room}, model=${modelZip.length} bytes`)
+  console.log(`Fake desktop online: room=${room}, model=${modelName}, bytes=${modelZip.length}`)
 })
 
 socket.on('message', (raw) => {
@@ -110,6 +156,31 @@ socket.on('message', (raw) => {
         resumed: message.payload?.resumeToken === resumeToken,
       },
     })
+    send({ type: 'companion.snapshot', payload: {
+      appName: 'NekoGPT',
+      version: 'local-test',
+      modelId,
+      modelName,
+      modelFile,
+      provider: 'Teste local',
+      ttsEnabled: true,
+      visionEnabled: true,
+      live2d: live2dSnapshot('happy'),
+    } })
+    setTimeout(() => send({ type: 'live2d.expression', payload: { emotion: 'surprised', live2d: live2dSnapshot('surprised') } }), 2200)
+    setTimeout(() => send({
+      type: 'live2d.speech',
+      payload: {
+        active: true,
+        text: 'Teste de fala com movimento e expressão.',
+        subtitle: 'Teste de fala com movimento e expressão.',
+        emotion: 'shy',
+        durationMs: 3600,
+        mouthOpen: 0.75,
+        live2d: live2dSnapshot('shy'),
+      },
+    }), 4200)
+    setTimeout(() => send({ type: 'live2d.speech', payload: { active: false } }), 8000)
     return
   }
 
@@ -127,21 +198,22 @@ socket.on('message', (raw) => {
     result = {
       appName: 'NekoGPT',
       version: 'local-test',
-      modelId: 'catgpt',
-      modelName: 'CatGPT',
-      modelFile: 'catgpt.model3.json',
+      modelId,
+      modelName,
+      modelFile,
       provider: 'Teste local',
       ttsEnabled: true,
       visionEnabled: true,
+      live2d: live2dSnapshot('happy'),
     }
   } else if (method === 'live2d.bundle') {
     result = {
       transferId: `bundle-${Date.now()}`,
       totalChunks,
       byteLength: modelZip.length,
-      modelFile: 'catgpt.model3.json',
-      modelId: 'catgpt',
-      modelName: 'CatGPT',
+      modelFile,
+      modelId,
+      modelName,
     }
   } else if (method === 'companion.chat.history') {
     result = fakeHistory

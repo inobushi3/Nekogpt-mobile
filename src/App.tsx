@@ -971,6 +971,12 @@ function cleanMobileStateString(value: unknown, maxLength = 180) {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
 }
 
+function normalizeMobileStateNumber(value: unknown, fallback: number | undefined, min: number, max: number) {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) return fallback;
+  return Math.min(max, Math.max(min, numberValue));
+}
+
 function normalizeMobileStringMap(value: unknown) {
   const result: Record<string, string> = {};
   if (!value || typeof value !== 'object') return result;
@@ -1027,6 +1033,23 @@ function normalizeCompanionLive2DState(input: unknown, fallback: CompanionLive2D
     autoMotionsEnabled: typeof source.autoMotionsEnabled === 'boolean'
       ? source.autoMotionsEnabled
       : fallback?.autoMotionsEnabled,
+    maxFps: normalizeMobileStateNumber(source.maxFps, fallback?.maxFps, 30, 60),
+    speakingMotionEnabled: typeof source.speakingMotionEnabled === 'boolean'
+      ? source.speakingMotionEnabled
+      : fallback?.speakingMotionEnabled,
+    speakingMotionIntensity: normalizeMobileStateNumber(source.speakingMotionIntensity, fallback?.speakingMotionIntensity, 0, 1),
+    speakingMotionSpeed: normalizeMobileStateNumber(source.speakingMotionSpeed, fallback?.speakingMotionSpeed, 0.5, 5),
+    speakingMotionBodyFollow: normalizeMobileStateNumber(source.speakingMotionBodyFollow, fallback?.speakingMotionBodyFollow, 0, 1),
+    speakingMotionVolumeThreshold: normalizeMobileStateNumber(source.speakingMotionVolumeThreshold, fallback?.speakingMotionVolumeThreshold, 0, 1),
+    speakingMotionSmoothing: normalizeMobileStateNumber(source.speakingMotionSmoothing, fallback?.speakingMotionSmoothing, 0, 1),
+    listeningMotionEnabled: typeof source.listeningMotionEnabled === 'boolean'
+      ? source.listeningMotionEnabled
+      : fallback?.listeningMotionEnabled,
+    listeningMotionIntensity: normalizeMobileStateNumber(source.listeningMotionIntensity, fallback?.listeningMotionIntensity, 0, 1),
+    listeningMotionSpeed: normalizeMobileStateNumber(source.listeningMotionSpeed, fallback?.listeningMotionSpeed, 0.5, 5),
+    listeningMotionBodyFollow: normalizeMobileStateNumber(source.listeningMotionBodyFollow, fallback?.listeningMotionBodyFollow, 0, 1),
+    listeningMotionVolumeThreshold: normalizeMobileStateNumber(source.listeningMotionVolumeThreshold, fallback?.listeningMotionVolumeThreshold, 0, 1),
+    listeningMotionSmoothing: normalizeMobileStateNumber(source.listeningMotionSmoothing, fallback?.listeningMotionSmoothing, 0, 1),
     emotion: normalizeMobileEmotion(source.emotion) || normalizeMobileEmotion(source.expression) || fallback?.emotion,
     expression: cleanMobileStateString(source.expression, 120) || fallback?.expression,
     motion: cleanMobileStateString(source.motion, 180) || fallback?.motion,

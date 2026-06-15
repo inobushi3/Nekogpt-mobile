@@ -34,19 +34,20 @@ type PointerStart = {
 
 const PARAMETER_IDS = {
   mouthOpen: ['ParamMouthOpenY', 'PARAM_MOUTH_OPEN_Y'],
-  mouthForm: ['ParamMouthForm', 'PARAM_MOUTH_FORM'],
-  angleX: ['ParamAngleX', 'PARAM_ANGLE_X'],
-  angleY: ['ParamAngleY', 'PARAM_ANGLE_Y'],
-  angleZ: ['ParamAngleZ', 'PARAM_ANGLE_Z'],
-  bodyX: ['ParamBodyAngleX', 'PARAM_BODY_ANGLE_X'],
-  bodyY: ['ParamBodyAngleY', 'PARAM_BODY_ANGLE_Y'],
-  bodyZ: ['ParamBodyAngleZ', 'PARAM_BODY_ANGLE_Z'],
-  eyeBallX: ['ParamEyeBallX', 'PARAM_EYE_BALL_X'],
-  eyeBallY: ['ParamEyeBallY', 'PARAM_EYE_BALL_Y'],
+  mouthForm: ['ParamMouthForm', 'PARAM_MOUTH_FORM', 'ParamMouthX', 'MouthForm'],
+  angleX: ['ParamAngleX', 'PARAM_ANGLE_X', 'ParamHeadAngleX', 'HeadAngleX', 'AngleX'],
+  angleY: ['ParamAngleY', 'PARAM_ANGLE_Y', 'ParamHeadAngleY', 'HeadAngleY', 'AngleY'],
+  angleZ: ['ParamAngleZ', 'PARAM_ANGLE_Z', 'ParamHeadAngleZ', 'HeadAngleZ', 'AngleZ'],
+  bodyX: ['ParamBodyAngleX', 'PARAM_BODY_ANGLE_X', 'ParamTorsoAngleX', 'BodyAngleX', 'BodyX'],
+  bodyY: ['ParamBodyAngleY', 'PARAM_BODY_ANGLE_Y', 'ParamTorsoAngleY', 'BodyAngleY', 'BodyY'],
+  bodyZ: ['ParamBodyAngleZ', 'PARAM_BODY_ANGLE_Z', 'ParamBodyRotateZ', 'BodyAngleZ', 'BodyZ'],
+  eyeBallX: ['ParamEyeBallX', 'PARAM_EYE_BALL_X', 'EyeBallX'],
+  eyeBallY: ['ParamEyeBallY', 'PARAM_EYE_BALL_Y', 'EyeBallY'],
   eyeLOpen: ['ParamEyeLOpen', 'PARAM_EYE_L_OPEN', 'ParamEyeLeftOpen', 'EyeLOpen', 'LeftEyeOpen'],
   eyeROpen: ['ParamEyeROpen', 'PARAM_EYE_R_OPEN', 'ParamEyeRightOpen', 'EyeROpen', 'RightEyeOpen'],
-  browLY: ['ParamBrowLY', 'PARAM_BROW_L_Y'],
-  browRY: ['ParamBrowRY', 'PARAM_BROW_R_Y'],
+  eyeSmile: ['ParamEyeSmile', 'PARAM_EYE_SMILE', 'EyeSmile'],
+  browLY: ['ParamBrowLY', 'PARAM_BROW_L_Y', 'ParamBrowLForm', 'BrowLY'],
+  browRY: ['ParamBrowRY', 'PARAM_BROW_R_Y', 'ParamBrowRForm', 'BrowRY'],
   breath: ['ParamBreath', 'PARAM_BREATH'],
 };
 
@@ -54,6 +55,65 @@ const MIN_STAGE_ZOOM = 0.3;
 const MAX_STAGE_ZOOM = 18;
 const LIVE2D_FORCE_PRIORITY = 3;
 const LIVE2D_MAX_FPS = 60;
+const LIVE2D_AUDIO_MOTION_TAU = Math.PI * 2;
+
+type Live2DSpeechSource = 'speaking' | 'listening';
+
+type Live2DAudioMotionSettings = {
+  enabled: boolean;
+  intensity: number;
+  speed: number;
+  bodyFollowRatio: number;
+  volumeThreshold: number;
+  smoothing: number;
+};
+
+type Live2DAudioMotionOscillator = {
+  ids: string[];
+  freqRatio: number;
+  amplitude: number;
+  isBody: boolean;
+};
+
+const LIVE2D_SPEAKING_MOTION_DEFAULTS: Live2DAudioMotionSettings = {
+  enabled: true,
+  intensity: 0.55,
+  speed: 2,
+  bodyFollowRatio: 0.5,
+  volumeThreshold: 0.02,
+  smoothing: 0.85,
+};
+
+const LIVE2D_LISTENING_MOTION_DEFAULTS: Live2DAudioMotionSettings = {
+  enabled: true,
+  intensity: 0.8,
+  speed: 1.4,
+  bodyFollowRatio: 0.4,
+  volumeThreshold: 0.008,
+  smoothing: 0.88,
+};
+
+const LIVE2D_AUDIO_MOTION_OSCILLATORS_SPEAKING: Live2DAudioMotionOscillator[] = [
+  { ids: PARAMETER_IDS.angleY, freqRatio: 1, amplitude: 6, isBody: false },
+  { ids: PARAMETER_IDS.angleY, freqRatio: 2.3, amplitude: 3, isBody: false },
+  { ids: PARAMETER_IDS.angleX, freqRatio: 0.7, amplitude: 4, isBody: false },
+  { ids: PARAMETER_IDS.angleX, freqRatio: 1.6, amplitude: 2, isBody: false },
+  { ids: PARAMETER_IDS.angleZ, freqRatio: 0.5, amplitude: 3, isBody: false },
+  { ids: PARAMETER_IDS.angleZ, freqRatio: 1.3, amplitude: 1.5, isBody: false },
+  { ids: PARAMETER_IDS.bodyX, freqRatio: 0.35, amplitude: 3, isBody: true },
+  { ids: PARAMETER_IDS.bodyY, freqRatio: 0.5, amplitude: 2, isBody: true },
+];
+
+const LIVE2D_AUDIO_MOTION_OSCILLATORS_LISTENING: Live2DAudioMotionOscillator[] = [
+  { ids: PARAMETER_IDS.angleY, freqRatio: 1, amplitude: 8, isBody: false },
+  { ids: PARAMETER_IDS.angleY, freqRatio: 1.8, amplitude: 4, isBody: false },
+  { ids: PARAMETER_IDS.angleX, freqRatio: 0.6, amplitude: 3, isBody: false },
+  { ids: PARAMETER_IDS.angleX, freqRatio: 1.4, amplitude: 1.5, isBody: false },
+  { ids: PARAMETER_IDS.angleZ, freqRatio: 0.45, amplitude: 2, isBody: false },
+  { ids: PARAMETER_IDS.angleZ, freqRatio: 1.1, amplitude: 1, isBody: false },
+  { ids: PARAMETER_IDS.bodyX, freqRatio: 0.3, amplitude: 2.5, isBody: true },
+  { ids: PARAMETER_IDS.bodyY, freqRatio: 0.4, amplitude: 2, isBody: true },
+];
 
 const LIVE2D_EMOTION_CANDIDATES: Record<string, string[]> = {
   neutral: ['neutral', 'normal', 'idle', 'default'],
@@ -127,6 +187,34 @@ const LIVE2D_EMOTION_CANDIDATES: Record<string, string[]> = {
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
+
+function clampOptionalNumber(value: unknown, fallback: number, min: number, max: number) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? clamp(numberValue, min, max) : fallback;
+}
+
+function getAudioMotionSettings(state: CompanionLive2DState | null | undefined, source: Live2DSpeechSource): Live2DAudioMotionSettings {
+  const defaults = source === 'listening'
+    ? LIVE2D_LISTENING_MOTION_DEFAULTS
+    : LIVE2D_SPEAKING_MOTION_DEFAULTS;
+  const prefix = source === 'listening' ? 'listeningMotion' : 'speakingMotion';
+
+  return {
+    enabled: typeof state?.[`${prefix}Enabled` as keyof CompanionLive2DState] === 'boolean'
+      ? Boolean(state?.[`${prefix}Enabled` as keyof CompanionLive2DState])
+      : defaults.enabled,
+    intensity: clampOptionalNumber(state?.[`${prefix}Intensity` as keyof CompanionLive2DState], defaults.intensity, 0, 1),
+    speed: clampOptionalNumber(state?.[`${prefix}Speed` as keyof CompanionLive2DState], defaults.speed, 0.5, 5),
+    bodyFollowRatio: clampOptionalNumber(state?.[`${prefix}BodyFollow` as keyof CompanionLive2DState], defaults.bodyFollowRatio, 0, 1),
+    volumeThreshold: clampOptionalNumber(state?.[`${prefix}VolumeThreshold` as keyof CompanionLive2DState], defaults.volumeThreshold, 0, 1),
+    smoothing: clampOptionalNumber(state?.[`${prefix}Smoothing` as keyof CompanionLive2DState], defaults.smoothing, 0, 1),
+  };
+}
+
+type Live2DParameterRef = {
+  id: string;
+  index: number | null;
+};
 
 function normalizeLive2DKey(value: unknown) {
   return String(value || '')
@@ -261,38 +349,220 @@ async function applyModelEmotionMotion(model: any, emotion: string) {
   }
 }
 
-function resolveParameterId(model: any, id: string) {
-  try {
-    return model?.internalModel?.getIdSafe?.(id) || id;
-  } catch {
-    return id;
+function normalizeParameterId(value: unknown) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function normalizeParameterIndex(value: unknown) {
+  const index = Number(value);
+  return Number.isInteger(index) && index >= 0 ? index : null;
+}
+
+function getCoreLive2DModel(model: any) {
+  return model?.internalModel?.coreModel || model?.internalModel?.model || model?.coreModel || null;
+}
+
+function live2DIdToString(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    if (typeof record.s === 'string') return record.s;
+    if (typeof record.id === 'string') return record.id;
+    if (typeof record.name === 'string') return record.name;
+    try {
+      const getString = (value as { getString?: () => unknown }).getString;
+      const stringValue = typeof getString === 'function' ? getString.call(value) : null;
+      if (typeof stringValue === 'string') return stringValue;
+      if (stringValue && typeof stringValue === 'object' && typeof (stringValue as { s?: unknown }).s === 'string') {
+        return (stringValue as { s: string }).s;
+      }
+    } catch {
+      // Fall through to String coercion below.
+    }
   }
+  const coerced = String(value || '');
+  return coerced === '[object Object]' ? '' : coerced;
+}
+
+function getLive2DParameterIds(coreModel: any) {
+  const ids: string[] = [];
+  const addId = (value: unknown) => {
+    const id = live2DIdToString(value).trim();
+    if (id && !ids.includes(id)) ids.push(id);
+  };
+  const addIds = (value: unknown) => {
+    if (Array.isArray(value)) {
+      value.forEach(addId);
+      return;
+    }
+    if (value && typeof value === 'object') {
+      Object.values(value as Record<string, unknown>).forEach(addId);
+    }
+  };
+
+  const parameterCount = normalizeParameterIndex(coreModel?.getParameterCount?.());
+  if (parameterCount !== null && typeof coreModel?.getParameterId === 'function') {
+    for (let index = 0; index < parameterCount; index += 1) {
+      try {
+        addId(coreModel.getParameterId(index));
+      } catch {
+        // Some runtimes throw while the model is warming up.
+      }
+    }
+  }
+
+  addIds(coreModel?.parameters?.ids);
+  addIds(coreModel?._parameterIds);
+  addIds(coreModel?.parameterIds);
+  addIds(coreModel?._model?._parameterIds);
+  addIds(coreModel?._model?.parameters?.ids);
+  return ids;
+}
+
+function getLive2DParameterIndex(coreModel: any, internalModel: any, id: string) {
+  const idsToTry: unknown[] = [id];
+  try {
+    if (typeof internalModel?.getIdSafe === 'function') idsToTry.unshift(internalModel.getIdSafe(id));
+  } catch {
+    // Safe Cubism ids are optional.
+  }
+
+  const indexMethods = [
+    { owner: coreModel, method: coreModel?.getParameterIndex },
+    { owner: coreModel, method: coreModel?.getParamIndex },
+    { owner: internalModel, method: internalModel?.getParameterIndex },
+    { owner: internalModel, method: internalModel?.getParamIndex },
+  ];
+
+  for (const { owner, method } of indexMethods) {
+    if (typeof method !== 'function') continue;
+    for (const candidate of idsToTry) {
+      try {
+        const index = normalizeParameterIndex(method.call(owner, candidate));
+        if (index !== null) return index;
+      } catch {
+        // Try next API.
+      }
+    }
+  }
+
+  const normalizedId = normalizeParameterId(id);
+  const listedIndex = getLive2DParameterIds(coreModel).findIndex((listedId) => normalizeParameterId(listedId) === normalizedId);
+  return listedIndex >= 0 ? listedIndex : null;
+}
+
+function resolveParameter(model: any, id: string): Live2DParameterRef | null {
+  const coreModel = getCoreLive2DModel(model);
+  if (!coreModel || !id) return null;
+  return {
+    id,
+    index: getLive2DParameterIndex(coreModel, model?.internalModel, id),
+  };
+}
+
+function getParameterIdsToTry(model: any, parameter: Live2DParameterRef) {
+  const ids: unknown[] = [parameter.id];
+  try {
+    if (typeof model?.internalModel?.getIdSafe === 'function') ids.unshift(model.internalModel.getIdSafe(parameter.id));
+  } catch {
+    // Safe Cubism ids are optional.
+  }
+  return ids;
 }
 
 function setParameter(model: any, id: string, value: number, weight = 1) {
-  const core = model?.internalModel?.coreModel;
-  try {
-    core?.setParameterValueById?.(resolveParameterId(model, id), value, weight);
-  } catch {
-    // Models expose different parameter sets; unsupported parameters are ignored.
+  const core = getCoreLive2DModel(model);
+  const parameter = resolveParameter(model, id);
+  if (!core || !parameter || !Number.isFinite(value)) return false;
+
+  if (parameter.index !== null && typeof core.setParameterValueByIndex === 'function') {
+    try {
+      core.setParameterValueByIndex(parameter.index, value, weight);
+      return true;
+    } catch {}
   }
+
+  if (parameter.index !== null && typeof core.setParamFloat === 'function') {
+    try {
+      core.setParamFloat(parameter.index, value);
+      return true;
+    } catch {}
+  }
+
+  for (const candidate of getParameterIdsToTry(model, parameter)) {
+    if (typeof core.setParameterValueById === 'function') {
+      try {
+        core.setParameterValueById(candidate, value, weight);
+        return true;
+      } catch {}
+    }
+    if (typeof core.setParamFloat === 'function') {
+      try {
+        core.setParamFloat(candidate, value);
+        return true;
+      } catch {}
+    }
+  }
+
+  return false;
 }
 
 function addParameter(model: any, id: string, value: number, weight = 1) {
-  const core = model?.internalModel?.coreModel;
-  try {
-    core?.addParameterValueById?.(resolveParameterId(model, id), value, weight);
-  } catch {
-    // Models expose different parameter sets; unsupported parameters are ignored.
+  const core = getCoreLive2DModel(model);
+  const parameter = resolveParameter(model, id);
+  if (!core || !parameter || !Number.isFinite(value)) return false;
+
+  if (parameter.index !== null && typeof core.addParameterValueByIndex === 'function') {
+    try {
+      core.addParameterValueByIndex(parameter.index, value, weight);
+      return true;
+    } catch {}
   }
+
+  for (const candidate of getParameterIdsToTry(model, parameter)) {
+    if (typeof core.addParameterValueById === 'function') {
+      try {
+        core.addParameterValueById(candidate, value, weight);
+        return true;
+      } catch {}
+    }
+  }
+
+  return setParameter(model, id, value, weight);
 }
 
 function setParameters(model: any, ids: string[], value: number, weight = 1) {
-  ids.forEach((id) => setParameter(model, id, value, weight));
+  for (const id of ids) {
+    if (setParameter(model, id, value, weight)) return true;
+  }
+  return false;
 }
 
 function addParameters(model: any, ids: string[], value: number, weight = 1) {
-  ids.forEach((id) => addParameter(model, id, value, weight));
+  for (const id of ids) {
+    if (addParameter(model, id, value, weight)) return true;
+  }
+  return false;
+}
+
+function applyAudioMotionOscillators(
+  model: any,
+  oscillators: Live2DAudioMotionOscillator[],
+  config: Live2DAudioMotionSettings,
+  phaseSeconds: number,
+  smoothedVolume: number,
+) {
+  if (!config.enabled || smoothedVolume < 0.005) return;
+
+  oscillators.forEach((oscillator) => {
+    const bodyScale = oscillator.isBody ? config.bodyFollowRatio : 1;
+    const value = Math.sin(phaseSeconds * oscillator.freqRatio * config.speed * LIVE2D_AUDIO_MOTION_TAU)
+      * oscillator.amplitude
+      * config.intensity
+      * smoothedVolume
+      * bodyScale;
+    addParameters(model, oscillator.ids, value, 1);
+  });
 }
 
 function normalizeHitArea(value: unknown) {
@@ -364,7 +634,16 @@ export function Live2DStage({
   const companionActionTokenRef = useRef(0);
   const companionStateRef = useRef<CompanionLive2DState | null>(companionState);
   const liveStateRef = useRef({ emotion, companionState, speaking, listening, audioLevel });
-  const frameStateRef = useRef({ mouth: 0, speaking: 0, listening: 0 });
+  const frameStateRef = useRef({
+    mouth: 0,
+    speaking: 0,
+    listening: 0,
+    speakingPhase: Math.random(),
+    listeningPhase: Math.random(),
+    speakingVolume: 0,
+    listeningVolume: 0,
+    lastFrameAt: 0,
+  });
   const [status, setStatus] = useState(t(language, 'live2d.status.waiting'));
   const [dragging, setDragging] = useState(false);
   const [touchPulse, setTouchPulse] = useState<{
@@ -466,13 +745,19 @@ export function Live2DStage({
   function applyLive2DFrame(model: any) {
     const state = liveStateRef.current;
     const frame = frameStateRef.current;
-    const now = performance.now() / 1000;
+    const nowMs = performance.now();
+    const now = nowMs / 1000;
+    const elapsedSeconds = frame.lastFrameAt ? Math.min((nowMs - frame.lastFrameAt) / 1000, 0.1) : 0.016;
+    frame.lastFrameAt = nowMs;
+    const speakingConfig = getAudioMotionSettings(state.companionState, 'speaking');
+    const listeningConfig = getAudioMotionSettings(state.companionState, 'listening');
     const normalizedEmotion = normalizeLive2DKey(
       state.companionState?.emotion
       || state.companionState?.expression
       || state.emotion
     );
     const smile = /happy|joy|love|excited|feliz|amor/.test(normalizedEmotion) ? 0.85 : 0;
+    const eyeSmile = /happy|joy|love|excited|laugh|hearteyes|heartbox/.test(normalizedEmotion) ? 0.55 : 0;
     const worried = /sad|fear|triste|medo/.test(normalizedEmotion) ? -0.65 : 0;
     const angry = /angry|brava|raiva/.test(normalizedEmotion) ? -0.4 : 0;
     const targetSpeaking = state.speaking ? 1 : 0;
@@ -485,11 +770,27 @@ export function Live2DStage({
     frame.listening += (targetListening - frame.listening) * 0.18;
     frame.mouth += (targetMouth - frame.mouth) * (targetMouth > frame.mouth ? 0.62 : 0.34);
 
-    const speak = frame.speaking;
-    const listen = frame.listening;
+    const smoothVolume = (current: number, target: number, config: Live2DAudioMotionSettings) => {
+      const gatedTarget = target > config.volumeThreshold ? target : 0;
+      const rise = 1 - 0.5 * config.smoothing;
+      const fall = 1 - config.smoothing;
+      return current + (gatedTarget - current) * (gatedTarget > current ? rise : fall);
+    };
+
+    const speakingVolumeTarget = state.speaking ? clamp(Number(state.audioLevel) || 0.42, 0, 1) : 0;
+    const listeningVolumeTarget = targetListening
+      ? Math.max(clamp(Number(state.audioLevel) || 0, 0, 1), 0.45)
+      : 0;
+    frame.speakingVolume = smoothVolume(frame.speakingVolume, speakingVolumeTarget, speakingConfig);
+    frame.listeningVolume = smoothVolume(frame.listeningVolume, listeningVolumeTarget, listeningConfig);
+    frame.speakingPhase += elapsedSeconds;
+    frame.listeningPhase += elapsedSeconds;
+
+    const speak = speakingConfig.enabled ? frame.speaking * speakingConfig.intensity : 0;
+    const listen = listeningConfig.enabled ? frame.listening * listeningConfig.intensity : 0;
     const active = Math.max(speak, listen);
-    const speakNod = Math.sin(now * 8.5) * speak;
-    const listenSway = Math.sin(now * 2.6) * listen;
+    const speakNod = Math.sin(now * 4.25 * speakingConfig.speed) * speak;
+    const listenSway = Math.sin(now * 1.85 * listeningConfig.speed) * listen;
     const idleWeight = clamp(1 - active * 0.42, 0.45, 1);
     const idleSlow = Math.sin(now * 1.35);
     const idleTiny = Math.sin(now * 0.72 + 1.6);
@@ -510,15 +811,30 @@ export function Live2DStage({
     addParameters(model, PARAMETER_IDS.mouthForm, smile + worried * 0.25, 0.8);
     addParameters(model, PARAMETER_IDS.browLY, worried + angry, 0.65);
     addParameters(model, PARAMETER_IDS.browRY, worried + angry, 0.65);
+    addParameters(model, PARAMETER_IDS.eyeSmile, eyeSmile, 0.55);
     addParameters(model, PARAMETER_IDS.breath, breath, 0.75);
-    addParameters(model, PARAMETER_IDS.angleX, idleSlow * 1.4 * idleWeight + listenSway * 6 + Math.sin(now * 4.2) * 1.4 * speak, 0.78);
-    addParameters(model, PARAMETER_IDS.angleY, breathWave * 0.75 * idleWeight + Math.sin(now * 3.1) * 2.8 * listen + speakNod * 1.8, 0.72);
-    addParameters(model, PARAMETER_IDS.angleZ, idleTiny * 1.1 * idleWeight + Math.sin(now * 2.1) * 3.4 * listen + Math.sin(now * 5.8) * 1.2 * speak, 0.72);
-    addParameters(model, PARAMETER_IDS.bodyX, idleSlow * 0.85 * idleWeight + listenSway * 3.2 + Math.sin(now * 3.8) * 1.1 * speak, 0.68);
-    addParameters(model, PARAMETER_IDS.bodyY, breathWave * 0.95 * idleWeight + Math.sin(now * 2.4) * 1.7 * listen + Math.abs(speakNod) * 0.8, 0.65);
-    addParameters(model, PARAMETER_IDS.bodyZ, idleTiny * 0.65 * idleWeight + Math.sin(now * 1.8) * 2.2 * listen, 0.62);
-    addParameters(model, PARAMETER_IDS.eyeBallX, Math.sin(now * 0.85) * 0.08 * idleWeight + Math.sin(now * 1.9) * 0.22 * listen, 0.55);
-    addParameters(model, PARAMETER_IDS.eyeBallY, Math.sin(now * 0.68 + 0.4) * 0.04 * idleWeight + 0.08 * listen + Math.sin(now * 2.8) * 0.06 * speak, 0.5);
+    addParameters(model, PARAMETER_IDS.angleX, idleSlow * 4.8 * idleWeight + listenSway * 7.5 + Math.sin(now * 4.2) * 2.6 * speak, 0.9);
+    addParameters(model, PARAMETER_IDS.angleY, breathWave * 2.3 * idleWeight + Math.sin(now * 3.1) * 3.4 * listen + speakNod * 2.4, 0.85);
+    addParameters(model, PARAMETER_IDS.angleZ, idleTiny * 3.2 * idleWeight + Math.sin(now * 2.1) * 4.1 * listen + Math.sin(now * 5.8) * 1.8 * speak, 0.84);
+    addParameters(model, PARAMETER_IDS.bodyX, idleSlow * 3.8 * idleWeight + listenSway * 4.3 + Math.sin(now * 3.8) * 1.8 * speak, 0.78);
+    addParameters(model, PARAMETER_IDS.bodyY, breathWave * 2.4 * idleWeight + Math.sin(now * 2.4) * 2.3 * listen + Math.abs(speakNod) * 1.1, 0.75);
+    addParameters(model, PARAMETER_IDS.bodyZ, idleTiny * 2.6 * idleWeight + Math.sin(now * 1.8) * 2.8 * listen, 0.72);
+    addParameters(model, PARAMETER_IDS.eyeBallX, Math.sin(now * 0.85) * 0.18 * idleWeight + Math.sin(now * 1.9) * 0.26 * listen, 0.65);
+    addParameters(model, PARAMETER_IDS.eyeBallY, Math.sin(now * 0.68 + 0.4) * 0.08 * idleWeight + 0.1 * listen + Math.sin(now * 2.8) * 0.08 * speak, 0.58);
+    applyAudioMotionOscillators(
+      model,
+      LIVE2D_AUDIO_MOTION_OSCILLATORS_SPEAKING,
+      speakingConfig,
+      frame.speakingPhase,
+      frame.speakingVolume,
+    );
+    applyAudioMotionOscillators(
+      model,
+      LIVE2D_AUDIO_MOTION_OSCILLATORS_LISTENING,
+      listeningConfig,
+      frame.listeningPhase,
+      frame.listeningVolume,
+    );
   }
 
   function applyTransform() {
@@ -742,6 +1058,15 @@ export function Live2DStage({
   ]);
 
   useEffect(() => {
+    const ticker = appRef.current?.ticker;
+    if (!ticker) return;
+    const maxFps = clampOptionalNumber(companionState?.maxFps, LIVE2D_MAX_FPS, 30, LIVE2D_MAX_FPS);
+    ticker.maxFPS = maxFps;
+    ticker.minFPS = Math.min(12, maxFps);
+    ticker.start?.();
+  }, [companionState?.maxFps]);
+
+  useEffect(() => {
     if (!bundle || !containerRef.current || !canvasRef.current) return;
     let disposed = false;
     let app: any = null;
@@ -767,12 +1092,13 @@ export function Live2DStage({
           powerPreference: 'high-performance',
         });
         if (app.ticker) {
-          app.ticker.maxFPS = LIVE2D_MAX_FPS;
-          app.ticker.minFPS = Math.min(app.ticker.minFPS || 30, LIVE2D_MAX_FPS);
+          const maxFps = clampOptionalNumber(companionStateRef.current?.maxFps, LIVE2D_MAX_FPS, 30, LIVE2D_MAX_FPS);
+          app.ticker.maxFPS = maxFps;
+          app.ticker.minFPS = Math.min(12, maxFps);
           app.ticker.start?.();
         }
         if (PIXI.Ticker?.shared) {
-          PIXI.Ticker.shared.maxFPS = LIVE2D_MAX_FPS;
+          PIXI.Ticker.shared.maxFPS = clampOptionalNumber(companionStateRef.current?.maxFps, LIVE2D_MAX_FPS, 30, LIVE2D_MAX_FPS);
         }
         const model = await engine.Live2DModel.from(loadedBundle.modelUrl, {
           autoUpdate: true,
