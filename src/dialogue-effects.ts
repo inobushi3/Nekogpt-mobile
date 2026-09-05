@@ -1,13 +1,15 @@
 const SPEED_STORAGE_KEY = 'nekogpt:dialogue-text-speed';
 const BASE_CHARACTERS_PER_SECOND = 18;
 const SPEED_VALUES = [1, 2, 3] as const;
+const INITIAL_DIALOGUE_SETTLE_MS = 1100;
 
 type DialogueSpeed = (typeof SPEED_VALUES)[number];
 
 let speed: DialogueSpeed = readSavedSpeed();
 let installed = false;
 let observer: MutationObserver | null = null;
-let animateAfter = 0;
+let dialogueLive = false;
+let settleTimer: number | null = null;
 const animatedRows = new WeakSet<HTMLElement>();
 const activeFrames = new WeakMap<HTMLElement, number>();
 
@@ -124,27 +126,75 @@ function animateAssistantRow(row: HTMLElement) {
   activeFrames.set(row, window.requestAnimationFrame(step));
 }
 
-function markExistingRowsAsComplete() {
-  document
+function markAssistantRowsComplete(root: ParentNode = document) {
+  root
     .querySelectorAll<HTMLElement>('.floating-messages .app-message-line--assistant')
     .forEach((row) => animatedRows.add(row));
 }
 
-function processAssistantRow(row: HTMLElement) {
-  if (performance.now() < animateAfter) {
-    animatedRows.add(row);
-    return;
-  }
-  animateAssistantRow(row);
+function rowsFromNode(node: Node, selector: string) {
+  if (!(node instanceof HTMLElement)) return [] as HTMLElement[];
+  const rows: HTMLElement[] = [];
+  if (node.matches(selector)) rows.push(node);
+  node.querySelectorAll<HTMLElement>(selector).forEach((row) => rows.push(row));
+  return rows;
 }
 
-function processAddedNode(node: Node) {
-  if (!(node instanceof HTMLElement)) return;
-  if (node.matches('.floating-messages .app-message-line--assistant')) processAssistantRow(node);
-  node
-    .querySelectorAll<HTMLElement>('.floating-messages .app-message-line--assistant')
-    .forEach((row) => processAssistantRow(row));
-  if (node.matches('.control-mic-button') || node.querySelector('.control-mic-button')) syncSpeedButton();
+function clearSettleTimer() {
+  if (settleTimer === null) return;
+  window.clearTimeout(settleTimer);
+  settleTimer = null;
+}
+
+function activateDialogueLiveMode() {
+  clearSettleTimer();
+  markAssistantRowsComplete();
+  dialogueLive = true;
+}
+
+function scheduleDialogueLiveMode() {
+  clearSettleTimer();
+  settleTimer = window.setTimeout(() => {
+    markAssistantRowsComplete();
+    dialogueLive = true;
+    settleTimer = null;
+  }, INITIAL_DIALOGUE_SETTLE_MS);
+}
+
+function processMutations(mutations: MutationRecord[]) {
+  const assistantRows: HTMLElement[] = [];
+  const userRows: HTMLElement[] = [];
+
+  for (const mutation of mutations) {
+    mutation.addedNodes.forEach((node) => {
+      assistantRows.push(...rowsFromNode(node, '.floating-messages .app-message-line--assistant'));
+      userRows.push(...rowsFromNode(node, '.floating-messages .app-message-line--user'));
+    });
+  }
+
+  if (!dialogueLive) {
+    if (assistantRows.length) {
+      // Initial/history hydration can arrive after the page itself has loaded.
+      // Mark that whole batch as already read so reload/reconnect never types it again.
+      assistantRows.forEach((row) => animatedRows.add(row));
+      scheduleDialogueLiveMode();
+    } else if (userRows.length) {
+      // An isolated optimistic user row means a real new turn has started.
+      activateDialogueLiveMode();
+    }
+  } else {
+    assistantRows.forEach(animateAssistantRow);
+  }
+
+  syncSpeedButton();
+}
+
+function handleComposerSubmit(event: SubmitEvent) {
+  const form = event.target instanceof Element ? event.target.closest<HTMLFormElement>('.floating-composer') : null;
+  if (!form) return;
+  // Arm live mode before React inserts the optimistic user message. The next
+  // assistant row is therefore the only row that receives the typewriter effect.
+  activateDialogueLiveMode();
 }
 
 function handleSpeedClick(event: MouseEvent) {
@@ -172,16 +222,11 @@ export function installDialogueEffects() {
   installed = true;
 
   const start = () => {
-    animateAfter = performance.now() + 1400;
-    markExistingRowsAsComplete();
+    markAssistantRowsComplete();
     syncSpeedButton();
+    document.addEventListener('submit', handleComposerSubmit, true);
     document.addEventListener('click', handleSpeedClick, true);
-    observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        mutation.addedNodes.forEach(processAddedNode);
-      }
-      syncSpeedButton();
-    });
+    observer = new MutationObserver(processMutations);
     observer.observe(document.body, { childList: true, subtree: true });
   };
 
