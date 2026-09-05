@@ -1,189 +1,252 @@
 /*
- * Dialogue overlay reference pass.
- *
- * This file intentionally overrides only the connected companion/chat surface.
- * The base styles remain untouched so this visual pass is easy to refine or
- * revert without destabilizing connection, settings, camera, or history UI.
+ * Reference dialogue UI pass.
+ * The connected chat is intentionally reduced to the same visual language as
+ * the supplied reference: avatar + name + text over the scene, followed by a
+ * single bottom response rail with speed, utility and play controls.
  */
 
+/* Keep the scene readable behind white dialogue text. */
 .companion-screen::after {
   z-index: 2;
-  background: linear-gradient(180deg, rgba(10, 7, 5, 0.18), rgba(12, 7, 4, 0.38));
+  background:
+    linear-gradient(180deg, rgba(17, 9, 4, 0.14) 0%, rgba(17, 9, 4, 0.24) 48%, rgba(19, 8, 3, 0.52) 100%);
 }
 
 .companion-screen.has-mobile-background::after {
-  background: linear-gradient(180deg, rgba(10, 7, 5, 0.22), rgba(12, 7, 4, 0.48));
+  background:
+    linear-gradient(180deg, rgba(17, 9, 4, 0.18) 0%, rgba(17, 9, 4, 0.30) 48%, rgba(19, 8, 3, 0.58) 100%);
+}
+
+/* The reference has no floating settings/audio chrome on the dialogue view. */
+.settings-trigger,
+.audio-trigger {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .floating-chat {
-  width: min(100%, 760px);
+  position: absolute;
+  z-index: 6;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: grid;
+  width: 100%;
+  max-width: none;
+  margin: 0;
   gap: 30px;
-  padding: 12px 20px max(54px, env(safe-area-inset-bottom));
+  padding: 10px 12px max(54px, env(safe-area-inset-bottom));
+  pointer-events: none;
 }
 
 .floating-messages {
+  display: flex;
   min-height: 0;
+  flex-direction: column;
+  justify-content: flex-end;
   gap: 0;
   padding: 0;
 }
 
+/* The reference only exposes the companion side in this overlay. */
 .floating-hint,
 .floating-chat .app-message-line--user,
 .floating-chat .app-message-time,
 .floating-chat .app-thinking {
-  display: none;
+  display: none !important;
 }
 
 .floating-chat .app-message-line--assistant {
+  width: 100%;
   justify-content: flex-start;
 }
 
 .floating-chat .app-assistant-row {
+  display: flex;
   width: 100%;
   max-width: 100%;
   align-items: flex-start;
-  gap: 14px;
+  gap: 12px;
 }
 
 .floating-chat .app-assistant-avatar {
+  display: inline-flex;
   width: 48px;
   height: 48px;
   flex: 0 0 48px;
-  margin-top: 0;
-  border: 1.5px solid rgba(255, 241, 224, 0.88);
-  background: rgba(255, 244, 228, 0.16);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.42);
+  margin: 0;
+  overflow: hidden;
+  border: 1.5px solid rgba(255, 246, 231, 0.96);
+  border-radius: 999px;
+  background: rgba(76, 54, 38, 0.34);
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.48);
+}
+
+.floating-chat .app-assistant-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
 }
 
 .floating-chat .app-message-stack--assistant {
-  width: calc(100% - 62px);
-  max-width: calc(100% - 62px);
-  gap: 8px;
-  align-items: stretch;
+  display: flex;
+  width: calc(100% - 60px);
+  max-width: calc(100% - 60px);
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
 }
 
 .floating-chat .app-assistant-author {
-  color: #e5a044;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  color: #e2a13f;
   font-size: 16px;
   font-weight: 650;
-  line-height: 1.2;
-  letter-spacing: 0.01em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+  line-height: 1.15;
+  letter-spacing: 0.005em;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
 }
 
-.floating-chat .app-message-bubble {
+/* Remove the old chat bubble completely. */
+.floating-chat .app-message-bubble,
+.floating-chat button.app-message-bubble,
+.floating-chat div.app-message-bubble {
+  position: relative;
+  display: block;
   width: 100%;
   max-width: 100%;
   overflow: visible;
   border: 0;
   border-radius: 0;
+  outline: 0;
   background: transparent;
   box-shadow: none;
-  color: rgba(255, 255, 255, 0.96);
-  cursor: pointer;
-  font-size: clamp(16px, 3.45vw, 18px);
+  color: rgba(255, 255, 255, 0.98);
+  cursor: default;
+  font-size: clamp(16px, 2.2vw, 19px);
   font-weight: 430;
   line-height: 1.42;
   padding: 0;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.88);
+  text-align: left;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.96), 0 0 1px rgba(0, 0, 0, 0.9);
+  transform: none;
   animation: dialogueTextEnter 180ms ease-out both;
-}
-
-.floating-chat div.app-message-bubble {
-  cursor: default;
+  overflow-wrap: anywhere;
 }
 
 .floating-chat .app-message-bubble + .app-message-bubble {
-  margin-top: 13px;
+  margin-top: 11px;
+}
+
+.floating-chat .app-message-content,
+.floating-chat .app-message-subtitle {
+  display: block;
 }
 
 .floating-chat .app-message-content {
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 
 .floating-chat .app-message-subtitle {
-  margin-top: 7px;
+  margin-top: 6px;
   border: 0;
   color: rgba(255, 255, 255, 0.68);
-  font-size: 0.76em;
-  padding-top: 0;
+  font-size: 0.78em;
+  padding: 0;
 }
 
+/* Bottom response rail — measured from the supplied 486x356 reference. */
 .floating-composer {
   position: relative;
   display: block;
+  width: 100%;
   min-height: 64px;
   pointer-events: auto;
 }
 
 .floating-composer .media-preview-strip {
   position: absolute;
-  right: 0;
+  right: 4px;
   bottom: 74px;
-  left: 62px;
-  display: flex;
-  justify-content: flex-start;
+  left: 72px;
+  z-index: 3;
 }
 
 .floating-composer .composer-field {
-  width: calc(100% - 60px);
+  position: relative;
+  display: flex;
+  width: calc(100% - 70px);
   min-height: 64px;
-  margin-left: 60px;
+  margin-left: 70px;
   align-items: center;
   overflow: hidden;
-  border: 1px solid rgba(224, 218, 212, 0.16);
+  border: 2px solid rgba(89, 76, 66, 0.58);
   border-radius: 34px;
-  background: rgba(8, 7, 7, 0.76);
+  background: rgba(8, 7, 6, 0.84);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.035),
-    0 8px 24px rgba(0, 0, 0, 0.34);
+    inset 0 1px 0 rgba(255, 255, 255, 0.025),
+    0 4px 14px rgba(0, 0, 0, 0.30);
   padding: 0;
-  backdrop-filter: blur(15px);
+  backdrop-filter: blur(9px);
 }
 
 .floating-composer .composer-field input {
-  height: 62px;
-  padding: 0 122px 0 28px;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: clamp(16px, 3.35vw, 18px);
+  width: 100%;
+  min-width: 0;
+  height: 60px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: rgba(236, 233, 230, 0.90);
+  font-size: clamp(16px, 2.15vw, 19px);
   font-weight: 430;
   line-height: 1;
+  padding: 0 122px 0 24px;
 }
 
 .floating-composer .composer-field input::placeholder {
-  color: rgba(207, 203, 201, 0.43);
+  color: rgba(207, 201, 196, 0.46);
   opacity: 1;
 }
 
+/* ×1 speed disc. This intentionally replaces the old microphone button visually. */
 .floating-composer .control-mic-button {
   position: absolute;
-  z-index: 4;
-  top: 0;
+  z-index: 5;
+  top: 2px;
   left: 0;
   display: grid;
-  width: 64px;
-  height: 64px;
+  width: 60px;
+  height: 60px;
   margin: 0;
   place-items: center;
-  border: 1px solid rgba(226, 203, 181, 0.28);
+  border: 2px solid rgba(130, 105, 82, 0.58);
   border-radius: 999px;
-  background: rgba(70, 51, 38, 0.88);
+  background: rgba(78, 57, 41, 0.92);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 8px 24px rgba(0, 0, 0, 0.34);
-  color: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(14px);
+    0 4px 13px rgba(0, 0, 0, 0.30);
+  color: rgba(255, 255, 255, 0.98);
+  cursor: pointer;
+  padding: 0;
+  backdrop-filter: blur(8px);
 }
 
 .floating-composer .control-mic-button svg {
-  display: none;
+  display: none !important;
 }
 
 .floating-composer .control-mic-button::before,
 .floating-composer .control-mic-button.is-listening::before {
   position: static;
   inset: auto;
+  display: block;
   width: auto;
   height: auto;
   border: 0;
@@ -193,7 +256,7 @@
   color: inherit;
   content: "×1";
   font-size: 19px;
-  font-weight: 620;
+  font-weight: 650;
   line-height: 1;
   opacity: 1;
   transform: none;
@@ -202,39 +265,45 @@
 
 .floating-composer .control-mic-button::after,
 .floating-composer .control-mic-button.is-muted::after {
-  display: none;
+  display: none !important;
 }
 
 .floating-composer .control-mic-button.is-active,
 .floating-composer .control-mic-button.is-muted,
 .floating-composer .control-mic-button.is-processing {
-  background: rgba(70, 51, 38, 0.88);
-  color: rgba(255, 255, 255, 0.94);
+  border-color: rgba(130, 105, 82, 0.58);
+  background: rgba(78, 57, 41, 0.92);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 8px 24px rgba(0, 0, 0, 0.34);
+    0 4px 13px rgba(0, 0, 0, 0.30);
+  color: rgba(255, 255, 255, 0.98);
   animation: none;
 }
 
+/* Reference utility asterisk. */
 .floating-composer .attach-media-button {
+  position: absolute;
+  z-index: 5;
   top: 0;
-  right: 66px;
+  right: 65px;
+  display: grid;
   width: 48px;
   height: 64px;
+  place-items: center;
+  border: 0;
   border-radius: 0;
-  color: rgba(194, 190, 188, 0.46);
-}
-
-.floating-composer .attach-media-button:hover:not(:disabled) {
   background: transparent;
-  color: rgba(222, 218, 216, 0.62);
+  color: rgba(165, 157, 151, 0.48);
+  cursor: pointer;
+  padding: 0;
 }
 
 .floating-composer .attach-media-button svg {
-  display: none;
+  display: none !important;
 }
 
 .floating-composer .attach-media-button::before {
+  display: block;
   content: "＊";
   font-family: Georgia, "Times New Roman", serif;
   font-size: 27px;
@@ -243,37 +312,53 @@
   transform: translateY(1px);
 }
 
+.floating-composer .attach-media-button:hover:not(:disabled),
+.floating-composer .attach-media-button:active:not(:disabled) {
+  background: transparent;
+  color: rgba(193, 187, 181, 0.66);
+  transform: none;
+}
+
+/* Grey circular play/send control inside the response rail. */
 .floating-composer .send-paw-button {
-  top: 7px;
-  right: 7px;
+  position: absolute;
+  z-index: 6;
+  top: 6px;
+  right: 6px;
   display: grid;
   width: 50px;
   height: 50px;
   place-items: center;
   border: 0;
   border-radius: 999px;
-  background: rgba(157, 157, 157, 0.68);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.13);
+  background: rgba(118, 118, 118, 0.94);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    0 2px 7px rgba(0, 0, 0, 0.28);
+  color: #fff;
+  cursor: pointer;
+  padding: 0;
   opacity: 1;
 }
 
 .floating-composer .send-paw-button .paw-icon {
-  display: none;
+  display: none !important;
 }
 
 .floating-composer .send-paw-button::before {
+  display: block;
   width: 0;
   height: 0;
   margin-left: 4px;
   border-top: 10px solid transparent;
   border-bottom: 10px solid transparent;
-  border-left: 15px solid rgba(239, 239, 239, 0.9);
+  border-left: 15px solid rgba(242, 242, 242, 0.94);
   content: "";
 }
 
 .floating-composer .send-paw-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.72;
+  cursor: default;
+  opacity: 0.86;
 }
 
 .floating-composer .send-paw-button:active:not(:disabled) {
@@ -285,10 +370,12 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-@media (max-width: 420px) {
+/* Reference-size mobile landscape tuning (486x356 source image). */
+@media (max-width: 620px) {
   .floating-chat {
-    padding-right: 16px;
-    padding-left: 16px;
+    gap: 31px;
+    padding-right: 11px;
+    padding-left: 11px;
   }
 
   .floating-chat .app-assistant-row {
@@ -296,70 +383,58 @@
   }
 
   .floating-chat .app-assistant-avatar {
-    width: 44px;
-    height: 44px;
-    flex-basis: 44px;
-  }
-
-  .floating-chat .app-message-stack--assistant {
-    width: calc(100% - 56px);
-    max-width: calc(100% - 56px);
-  }
-
-  .floating-chat .app-assistant-author {
-    font-size: 15px;
-  }
-
-  .floating-composer .control-mic-button {
-    width: 60px;
-    height: 60px;
-  }
-
-  .floating-composer {
-    min-height: 60px;
-  }
-
-  .floating-composer .composer-field {
-    width: calc(100% - 56px);
-    min-height: 60px;
-    margin-left: 56px;
-  }
-
-  .floating-composer .composer-field input {
-    height: 58px;
-    padding-right: 112px;
-    padding-left: 24px;
-  }
-
-  .floating-composer .attach-media-button {
-    right: 60px;
-    height: 60px;
-  }
-
-  .floating-composer .send-paw-button {
-    top: 6px;
-    right: 6px;
-    width: 48px;
-    height: 48px;
-  }
-}
-
-@media (max-height: 500px) {
-  .floating-chat {
-    gap: 30px;
-    padding-top: 8px;
-    padding-bottom: max(54px, env(safe-area-inset-bottom));
-  }
-
-  .floating-chat .app-message-bubble {
-    font-size: 18px;
-    line-height: 1.42;
-    padding: 0;
-  }
-
-  .floating-chat .app-assistant-avatar {
     width: 48px;
     height: 48px;
     flex-basis: 48px;
+  }
+
+  .floating-chat .app-message-stack--assistant {
+    width: calc(100% - 60px);
+    max-width: calc(100% - 60px);
+  }
+
+  .floating-chat .app-assistant-author {
+    font-size: 16px;
+  }
+
+  .floating-chat .app-message-bubble,
+  .floating-chat button.app-message-bubble,
+  .floating-chat div.app-message-bubble {
+    font-size: 17px;
+    line-height: 1.43;
+  }
+
+  .floating-composer,
+  .floating-composer .composer-field {
+    min-height: 64px;
+  }
+
+  .floating-composer .composer-field input {
+    height: 60px;
+    font-size: 17px;
+  }
+}
+
+/* Wider landscape: keep the bar nearly edge-to-edge instead of the old 720px cap. */
+@media (min-width: 621px) and (orientation: landscape) {
+  .floating-chat {
+    padding-right: max(20px, env(safe-area-inset-right));
+    padding-left: max(20px, env(safe-area-inset-left));
+  }
+
+  .floating-chat .app-assistant-row {
+    max-width: min(820px, 82vw);
+  }
+
+  .floating-composer .composer-field {
+    width: calc(100% - 70px);
+  }
+}
+
+@media (max-height: 430px) {
+  .floating-chat {
+    gap: 28px;
+    padding-top: 6px;
+    padding-bottom: max(53px, env(safe-area-inset-bottom));
   }
 }
