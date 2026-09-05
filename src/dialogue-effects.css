@@ -36,18 +36,26 @@
   outline-offset: 3px;
 }
 
-/* Replace the reference asterisk with a small hand-built neko paw.
- * It is CSS geometry, so it stays crisp and does not depend on an emoji/font. */
+/* Use the exact uploaded photo icon as an alpha mask, recolored cream. */
 .floating-composer .attach-media-button::before {
-  width: 12px !important;
-  height: 10px !important;
-  border-radius: 58% 58% 48% 48% !important;
-  background: currentColor !important;
-  box-shadow:
-    -8px -7px 0 -2.5px currentColor,
-    -3px -11px 0 -2.5px currentColor,
-    3px -11px 0 -2.5px currentColor,
-    8px -7px 0 -2.5px currentColor !important;
+  display: block !important;
+  width: 24px !important;
+  height: 24px !important;
   content: "" !important;
-  transform: translateY(4px) !important;
+  background: #f2e4c9 !important;
+  -webkit-mask-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAACnElEQVR4nO2Y3YtOQRzHP7tP2aItycvycCGvN95y4+VOuVncuKQkfwBSlAturFD+AbniQrSeveBZpShx4UbilhSJWEv2sVtedzT1PZq2M84zZ3POMzmfmjrNzG/O7zvn95uZM1BRUVFR8Y+ZAZwD3gKmhPIFuAvsyCvgbEmOm5RyKo+ANzLeTDksBI4CX+VH8Jd4ANynfI5JgA2nKOmTgBYRY1S8LAYGpbKMJG0BDWBFHgHW+Y8dsNIY+VEPFTCoxpse4yKoA035cS1UQBI2ZTmfsER+fCZQQGaCFIjx+FKqgA3ALR0N7NceBtbHImA1MJGSrBPAqhgEDDmJuUDFPhstmx0vYERj293UPeMY4H1MAqzTUQoYckKoTyWqELKJOp6SxOOxJDFaMptaQlva8dcF+vJ/b2Q14CTwWuWE6qIQ0AVcTInhy2rreAFnnJ1zu0qys9q2jhZwRPXfgX6nvl91Rn3SmAucBp5J8AvgvE6chQjYC/wCJoH9KTZ7nPYDTn03sA/44Plh+QZcmLIzT1vA1NuHncAPGRzyGanNqK+12QI8dl52W1cyM4GNwBWJtm32ZDoAzM7wpS0BLludGLchkMWAM7OTen4J7Pb0XwvccBz6BBwHZmW8py0BazSg0WduZ5XpUt/kBZc041lsAu44du+Ag0BP4J/aH5Y6N3HXA9f5mmyMxrBjtcs24KEj5BVwWGPUdOEwrDb7757KfK0Wye1X2ixk0SNbO8ZznftD2AU89SR+clux3Gd8T50eAb3kp1djGCVjKN0S0tCX+AmMaea9zuOonMf0sWM80QpUGGMSYOOtTOYoH+xlbhANCWiWKGKRjtnWj6uhxiuB0b8kUJFlJCvefdT1q5eEU9FlVDO/LI/zFRUVxMdvxKzoc2MBWLYAAAAASUVORK5CYII=") !important;
+  mask-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAACXBIWXMAAAsTAAALEwEAmpwYAAACnElEQVR4nO2Y3YtOQRzHP7tP2aItycvycCGvN95y4+VOuVncuKQkfwBSlAturFD+AbniQrSeveBZpShx4UbilhSJWEv2sVtedzT1PZq2M84zZ3POMzmfmjrNzG/O7zvn95uZM1BRUVFR8Y+ZAZwD3gKmhPIFuAvsyCvgbEmOm5RyKo+ANzLeTDksBI4CX+VH8Jd4ANynfI5JgA2nKOmTgBYRY1S8LAYGpbKMJG0BDWBFHgHW+Y8dsNIY+VEPFTCoxpse4yKoA035cS1UQBI2ZTmfsER+fCZQQGaCFIjx+FKqgA3ALR0N7NceBtbHImA1MJGSrBPAqhgEDDmJuUDFPhstmx0vYERj293UPeMY4H1MAqzTUQoYckKoTyWqELKJOp6SxOOxJDFaMptaQlva8dcF+vJ/b2Q14CTwWuWE6qIQ0AVcTInhy2rreAFnnJ1zu0qys9q2jhZwRPXfgX6nvl91Rn3SmAucBp5J8AvgvE6chQjYC/wCJoH9KTZ7nPYDTn03sA/44Plh+QZcmLIzT1vA1NuHncAPGRzyGanNqK+12QI8dl52W1cyM4GNwBWJtm32ZDoAzM7wpS0BLludGLchkMWAM7OTen4J7Pb0XwvccBz6BBwHZmW8py0BazSg0WduZ5XpUt/kBZc041lsAu44du+Ag0BP4J/aH5Y6N3HXA9f5mmyMxrBjtcs24KEj5BVwWGPUdOEwrDb7757KfK0Wye1X2ixk0SNbO8ZznftD2AU89SR+clux3Gd8T50eAb3kp1djGCVjKN0S0tCX+AmMaea9zuOonMf0sWM80QpUGGMSYOOtTOYoH+xlbhANCWiWKGKRjtnWj6uhxiuB0b8kUJFlJCvefdT1q5eEU9FlVDO/LI/zFRUVxMdvxKzoc2MBWLYAAAAASUVORK5CYII=") !important;
+  -webkit-mask-repeat: no-repeat !important;
+  mask-repeat: no-repeat !important;
+  -webkit-mask-position: center !important;
+  mask-position: center !important;
+  -webkit-mask-size: contain !important;
+  mask-size: contain !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.floating-composer .attach-media-button:hover:not(:disabled)::before,
+.floating-composer .attach-media-button:active:not(:disabled)::before {
+  background: #fff0d5 !important;
 }
