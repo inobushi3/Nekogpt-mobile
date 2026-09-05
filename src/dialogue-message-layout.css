@@ -1,0 +1,211 @@
+/*
+ * Dialogue message layout overrides.
+ * Main companion view: up to three chronological entries, with user messages
+ * rendered as compact cream reply bubbles like the supplied reference.
+ * History view reuses the same visual language instead of generic chat cards.
+ */
+
+.floating-messages {
+  gap: 14px;
+}
+
+.floating-chat .app-message-line--user {
+  display: flex !important;
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.floating-chat .app-message-stack--user {
+  width: auto;
+  max-width: min(82%, 560px);
+  align-items: flex-end;
+}
+
+.floating-chat .app-message-bubble--user,
+.floating-chat button.app-message-bubble--user,
+.floating-chat div.app-message-bubble--user {
+  width: auto;
+  max-width: 100%;
+  padding: 10px 14px !important;
+  border: 1px solid rgba(255, 248, 232, 0.44) !important;
+  border-radius: 16px !important;
+  background:
+    linear-gradient(180deg, rgba(247, 235, 211, 0.97), rgba(231, 214, 184, 0.95)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 5px 15px rgba(0, 0, 0, 0.24) !important;
+  color: #40352b !important;
+  font-size: clamp(15px, 2vw, 18px);
+  line-height: 1.38;
+  text-shadow: none !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+  backdrop-filter: blur(2px) !important;
+}
+
+/* History should look like the conversation on the companion screen. */
+.history-messages {
+  gap: 18px;
+  padding-right: 14px;
+  padding-left: 14px;
+}
+
+.history-messages .app-message-time {
+  display: none !important;
+}
+
+.history-messages .app-message-line--assistant {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.history-messages .app-assistant-row {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.history-messages .app-assistant-avatar {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  margin: 0;
+  overflow: hidden;
+  border: 1.5px solid rgba(255, 246, 231, 0.92);
+  border-radius: 999px;
+  background: rgba(40, 32, 27, 0.24);
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.38);
+}
+
+.history-messages .app-assistant-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.history-messages .app-assistant-avatar:has(img[src*="neko-mark.svg"]) {
+  display: none !important;
+}
+
+.history-messages .app-message-stack--assistant {
+  display: flex;
+  width: calc(100% - 60px);
+  max-width: calc(100% - 60px);
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.history-messages .app-assistant-row:has(.app-assistant-avatar img[src*="neko-mark.svg"]) .app-message-stack--assistant {
+  width: 100%;
+  max-width: 100%;
+}
+
+.history-messages .app-assistant-author {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  color: #e2a13f;
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.15;
+  letter-spacing: 0.005em;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  white-space: nowrap;
+}
+
+.history-messages .app-message-bubble--assistant,
+.history-messages button.app-message-bubble--assistant,
+.history-messages div.app-message-bubble--assistant {
+  width: 100%;
+  max-width: 100%;
+  padding: 0 !important;
+  overflow: visible;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: rgba(255, 255, 255, 0.98) !important;
+  font-size: clamp(16px, 2.2vw, 19px);
+  font-weight: 430;
+  line-height: 1.42;
+  text-align: left;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.96), 0 0 1px rgba(0, 0, 0, 0.9);
+  transform: none;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.history-messages .app-message-line--user {
+  display: flex;
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.history-messages .app-message-stack--user {
+  width: auto;
+  max-width: min(82%, 560px);
+  align-items: flex-end;
+}
+
+.history-messages .app-message-bubble--user,
+.history-messages button.app-message-bubble--user,
+.history-messages div.app-message-bubble--user {
+  width: auto;
+  max-width: 100%;
+  padding: 10px 14px !important;
+  border: 1px solid rgba(255, 248, 232, 0.44) !important;
+  border-radius: 16px !important;
+  background:
+    linear-gradient(180deg, rgba(247, 235, 211, 0.97), rgba(231, 214, 184, 0.95)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 5px 15px rgba(0, 0, 0, 0.24) !important;
+  color: #40352b !important;
+  font-size: clamp(15px, 2vw, 18px);
+  line-height: 1.38;
+  text-shadow: none !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+  backdrop-filter: blur(2px) !important;
+}
+
+@media (max-width: 620px) {
+  .floating-messages {
+    gap: 12px;
+  }
+
+  .floating-chat .app-message-stack--user,
+  .history-messages .app-message-stack--user {
+    max-width: 84%;
+  }
+
+  .floating-chat .app-message-bubble--user,
+  .history-messages .app-message-bubble--user {
+    padding: 9px 13px !important;
+    border-radius: 15px !important;
+    font-size: 16px;
+  }
+
+  .history-messages .app-assistant-avatar {
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
+  }
+
+  .history-messages .app-message-stack--assistant {
+    width: calc(100% - 56px);
+    max-width: calc(100% - 56px);
+  }
+}
