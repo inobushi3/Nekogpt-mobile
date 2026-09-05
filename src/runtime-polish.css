@@ -1,0 +1,54 @@
+/* Final interaction/performance overrides loaded after the dialogue theme. */
+
+/* The reference-theme pass hid the original mobile controls. Keep the real
+ * application controls available in their original top-right positions. */
+.settings-trigger,
+.audio-trigger {
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+/* Keep the animated canvas on its own compositor layer. This avoids unrelated
+ * page painting work while dragging/pinching the Live2D model. */
+.live2d-stage {
+  contain: strict;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+.live2d-stage canvas {
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  will-change: contents;
+}
+
+/* Backdrop blur over a continuously redrawn WebGL/canvas surface is expensive
+ * on phones. Preserve the soft game-like glass, but keep it deliberately light. */
+.floating-chat::before {
+  -webkit-backdrop-filter: blur(2px) saturate(102%) !important;
+  backdrop-filter: blur(2px) saturate(102%) !important;
+}
+
+.floating-composer .composer-field,
+.floating-composer .control-mic-button {
+  -webkit-backdrop-filter: blur(2px) !important;
+  backdrop-filter: blur(2px) !important;
+}
+
+/* Cream reply bubbles are already opaque enough; an extra live backdrop pass
+ * adds GPU work without changing their appearance meaningfully. */
+.floating-chat .app-message-bubble--user,
+.history-messages .app-message-bubble--user {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* While the user is actively moving or pinching the model, prioritize input
+ * latency and canvas redraws. The dark gradient remains, only the blur pass is
+ * temporarily skipped until the pointer gesture ends. */
+.companion-screen:has(.live2d-stage--dragging) .floating-chat::before {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
