@@ -1,0 +1,123 @@
+/* Relationship/context HUD and the restored microphone control. */
+.relationship-gauge {
+  position: absolute;
+  z-index: 9;
+  top: max(12px, env(safe-area-inset-top));
+  left: 12px;
+  width: 230px;
+  height: 52px;
+  filter: drop-shadow(0 5px 12px rgba(0, 0, 0, 0.34));
+  pointer-events: none;
+  user-select: none;
+}
+
+.relationship-gauge__track {
+  position: absolute;
+  top: 14px;
+  left: 0;
+  width: 200px;
+  height: 24px;
+}
+
+.relationship-gauge__base {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 200px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.relationship-gauge__fill {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: block;
+  width: 0;
+  height: 12px;
+  overflow: hidden;
+  transition: width 320ms cubic-bezier(.2,.72,.2,1);
+}
+
+.relationship-gauge__fill img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  width: 188px;
+  max-width: none;
+  height: 12px;
+  object-fit: fill;
+}
+
+.relationship-gauge__heart {
+  position: absolute;
+  top: 0;
+  left: 176px;
+  display: block;
+  width: 60px;
+  height: 52px;
+  object-fit: contain;
+  transform-origin: center;
+  transition: transform 180ms ease, filter 180ms ease;
+}
+
+.relationship-gauge[data-percent="100"] .relationship-gauge__heart {
+  filter: drop-shadow(0 0 8px rgba(255, 65, 130, 0.38));
+  transform: scale(1.04);
+}
+
+.mic-trigger {
+  position: absolute;
+  z-index: 9;
+  top: max(110px, calc(env(safe-area-inset-top) + 108px));
+  right: 14px;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 13px;
+  background: rgba(13, 13, 18, 0.78);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32);
+  color: #ff6d88;
+  cursor: pointer;
+  padding: 0;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition: color 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 120ms ease;
+}
+
+.mic-trigger:active {
+  transform: translateY(1px) scale(0.96);
+}
+
+.mic-trigger.is-ready {
+  border-color: rgba(46, 204, 145, 0.34);
+  background: rgba(18, 42, 32, 0.78);
+  color: #2ecc91;
+}
+
+.mic-trigger.is-listening,
+.mic-trigger.is-processing {
+  box-shadow: 0 0 22px rgba(46, 204, 145, 0.26), 0 12px 30px rgba(0, 0, 0, 0.32);
+}
+
+.mic-trigger svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+@media (max-width: 520px) {
+  .relationship-gauge {
+    top: max(10px, env(safe-area-inset-top));
+    left: 8px;
+    transform: scale(0.9);
+    transform-origin: top left;
+  }
+}
