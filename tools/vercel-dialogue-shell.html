@@ -8,21 +8,12 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="NekoGPT" />
-
-    <!--
-      Production-safe shell:
-      the application runtime/assets stay on the last known-good Vite deployment.
-      This prevents Vite's preload helper, service worker registration and Live2D
-      runtime from resolving /assets/* against a shell-only deployment.
-    -->
     <base href="https://nekogpt-mobile-odnk24a7g-inobushi3s-projects.vercel.app/" />
-
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/png" sizes="32x32" href="/nekogpt-favicon-32.png?v=2" />
     <link rel="icon" type="image/png" sizes="192x192" href="/nekogpt-favicon-192.png?v=2" />
     <link rel="apple-touch-icon" href="/nekogpt-apple-touch-icon.png?v=2" />
     <link rel="stylesheet" crossorigin href="/assets/index-C0013maK.css" />
-
     <style>
       .companion-screen::after{z-index:2!important;background:linear-gradient(180deg,rgba(17,9,4,.14),rgba(17,9,4,.24) 48%,rgba(19,8,3,.52))!important}
       .companion-screen.has-mobile-background::after{background:linear-gradient(180deg,rgba(17,9,4,.18),rgba(17,9,4,.30) 48%,rgba(19,8,3,.58))!important}
@@ -33,35 +24,52 @@
       .floating-chat .app-message-line--assistant{width:100%!important;justify-content:flex-start!important}
       .floating-chat .app-assistant-row{width:100%!important;max-width:100%!important;align-items:flex-start!important;gap:12px!important}
       .floating-chat .app-assistant-avatar{width:48px!important;height:48px!important;flex:0 0 48px!important;margin:0!important;border:1.5px solid rgba(255,246,231,.96)!important;border-radius:999px!important;background:rgba(76,54,38,.34)!important;box-shadow:0 2px 7px rgba(0,0,0,.48)!important}
-      .floating-chat .app-message-stack--assistant{width:calc(100% - 60px)!important;max-width:calc(100% - 60px)!important;align-items:flex-start!important;gap:7px!important}
+      .floating-chat .app-message-stack--assistant{position:relative!important;width:calc(100% - 60px)!important;max-width:calc(100% - 60px)!important;align-items:flex-start!important;gap:7px!important;padding:12px 14px 13px!important;border:1px solid rgba(255,255,255,.075)!important;border-radius:18px!important;background:linear-gradient(135deg,rgba(22,17,15,.54),rgba(8,7,6,.44)),rgba(8,7,6,.34)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.035),0 9px 24px rgba(0,0,0,.18)!important;-webkit-backdrop-filter:blur(16px) saturate(118%)!important;backdrop-filter:blur(16px) saturate(118%)!important}
+      .floating-chat .app-message-stack--assistant::after{position:absolute;inset:0;border-radius:inherit;pointer-events:none;content:"";box-shadow:inset 0 -1px 0 rgba(255,255,255,.025)}
       .floating-chat .app-assistant-author{color:#e2a13f!important;font-size:16px!important;font-weight:650!important;line-height:1.15!important;text-shadow:0 1px 3px rgba(0,0,0,.9)!important}
       .floating-chat .app-message-bubble,.floating-chat button.app-message-bubble,.floating-chat div.app-message-bubble{width:100%!important;max-width:100%!important;overflow:visible!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;color:rgba(255,255,255,.98)!important;cursor:default!important;font-size:clamp(16px,2.2vw,19px)!important;font-weight:430!important;line-height:1.42!important;padding:0!important;text-align:left!important;text-shadow:0 1px 3px rgba(0,0,0,.96),0 0 1px rgba(0,0,0,.9)!important;transform:none!important}
       .floating-chat .app-message-bubble+.app-message-bubble{margin-top:11px!important}
-      .floating-chat .app-message-subtitle{margin-top:6px!important;border:0!important;color:rgba(255,255,255,.68)!important;padding:0!important}
+      .floating-chat .app-message-content{min-height:1em;white-space:pre-wrap}.floating-chat .app-message-subtitle{margin-top:6px!important;border:0!important;color:rgba(255,255,255,.68)!important;padding:0!important}
       .floating-composer{position:relative!important;display:block!important;width:100%!important;min-height:64px!important;pointer-events:auto!important}
-      .floating-composer .composer-field{position:relative!important;display:flex!important;width:calc(100% - 70px)!important;min-height:64px!important;margin-left:70px!important;align-items:center!important;overflow:hidden!important;border:2px solid rgba(89,76,66,.58)!important;border-radius:34px!important;background:rgba(8,7,6,.84)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.025),0 4px 14px rgba(0,0,0,.30)!important;padding:0!important;backdrop-filter:blur(9px)!important}
-      .floating-composer .composer-field input{height:60px!important;padding:0 122px 0 24px!important;color:rgba(236,233,230,.90)!important;font-size:clamp(16px,2.15vw,19px)!important;line-height:1!important}
-      .floating-composer .composer-field input::placeholder{color:rgba(207,201,196,.46)!important;opacity:1!important}
-      .floating-composer .control-mic-button{position:absolute!important;z-index:5!important;top:2px!important;left:0!important;display:grid!important;width:60px!important;height:60px!important;margin:0!important;place-items:center!important;border:2px solid rgba(130,105,82,.58)!important;border-radius:999px!important;background:rgba(78,57,41,.92)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 4px 13px rgba(0,0,0,.30)!important;color:#fff!important;padding:0!important}
-      .floating-composer .control-mic-button svg{display:none!important}
-      .floating-composer .control-mic-button::before,.floating-composer .control-mic-button.is-listening::before{position:static!important;display:block!important;width:auto!important;height:auto!important;border:0!important;background:transparent!important;box-shadow:none!important;content:"×1"!important;font-size:19px!important;font-weight:650!important;line-height:1!important;opacity:1!important;transform:none!important;animation:none!important}
-      .floating-composer .control-mic-button::after,.floating-composer .control-mic-button.is-muted::after{display:none!important}
-      .floating-composer .control-mic-button.is-active,.floating-composer .control-mic-button.is-muted,.floating-composer .control-mic-button.is-processing{border-color:rgba(130,105,82,.58)!important;background:rgba(78,57,41,.92)!important;color:#fff!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 4px 13px rgba(0,0,0,.30)!important;animation:none!important}
-      .floating-composer .attach-media-button{position:absolute!important;z-index:5!important;top:0!important;right:65px!important;display:grid!important;width:48px!important;height:64px!important;place-items:center!important;border:0!important;border-radius:0!important;background:transparent!important;color:rgba(165,157,151,.48)!important;padding:0!important}
-      .floating-composer .attach-media-button svg{display:none!important}
-      .floating-composer .attach-media-button::before{display:block!important;content:"＊"!important;font-family:Georgia,"Times New Roman",serif!important;font-size:27px!important;line-height:1!important}
-      .floating-composer .send-paw-button{position:absolute!important;z-index:6!important;top:6px!important;right:6px!important;display:grid!important;width:50px!important;height:50px!important;place-items:center!important;border:0!important;border-radius:999px!important;background:rgba(118,118,118,.94)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.13),0 2px 7px rgba(0,0,0,.28)!important;color:#fff!important;padding:0!important;opacity:1!important}
-      .floating-composer .send-paw-button .paw-icon{display:none!important}
-      .floating-composer .send-paw-button::before{display:block!important;width:0!important;height:0!important;margin-left:4px!important;border-top:10px solid transparent!important;border-bottom:10px solid transparent!important;border-left:15px solid rgba(242,242,242,.94)!important;content:""!important}
-      .floating-composer .send-paw-button:disabled{opacity:.86!important}
-      @media(max-width:620px){.floating-chat{gap:31px!important;padding-left:11px!important;padding-right:11px!important}.floating-chat .app-message-bubble{font-size:17px!important;line-height:1.43!important}}
+      .floating-composer .composer-field{position:relative!important;display:flex!important;width:calc(100% - 70px)!important;min-height:64px!important;margin-left:70px!important;align-items:center!important;overflow:hidden!important;border:2px solid rgba(89,76,66,.58)!important;border-radius:34px!important;background:rgba(8,7,6,.84)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.025),0 4px 14px rgba(0,0,0,.30)!important;padding:0!important;-webkit-backdrop-filter:blur(9px)!important;backdrop-filter:blur(9px)!important}
+      .floating-composer .composer-field input{height:60px!important;padding:0 122px 0 24px!important;color:rgba(236,233,230,.90)!important;font-size:clamp(16px,2.15vw,19px)!important;line-height:1!important}.floating-composer .composer-field input::placeholder{color:rgba(207,201,196,.46)!important;opacity:1!important}
+      .floating-composer .control-mic-button{position:absolute!important;z-index:5!important;top:2px!important;left:0!important;display:grid!important;width:60px!important;height:60px!important;margin:0!important;place-items:center!important;border:2px solid rgba(130,105,82,.58)!important;border-radius:999px!important;background:rgba(78,57,41,.92)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 4px 13px rgba(0,0,0,.30)!important;color:#fff!important;padding:0!important;cursor:pointer!important}
+      .floating-composer .control-mic-button svg{display:none!important}.floating-composer .control-mic-button::before,.floating-composer .control-mic-button.is-listening::before{position:static!important;display:block!important;width:auto!important;height:auto!important;border:0!important;background:transparent!important;box-shadow:none!important;content:attr(data-speed-label)!important;font-size:19px!important;font-weight:650!important;line-height:1!important;opacity:1!important;transform:none!important;animation:none!important}.floating-composer .control-mic-button::after,.floating-composer .control-mic-button.is-muted::after{display:none!important}
+      .floating-composer .control-mic-button.is-active,.floating-composer .control-mic-button.is-muted,.floating-composer .control-mic-button.is-processing{border-color:rgba(130,105,82,.58)!important;background:rgba(78,57,41,.92)!important;color:#fff!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 4px 13px rgba(0,0,0,.30)!important;animation:none!important}.floating-composer .control-mic-button[data-dialogue-speed="2"]{border-color:rgba(154,125,96,.68)!important;background:rgba(88,65,47,.94)!important}.floating-composer .control-mic-button[data-dialogue-speed="3"]{border-color:rgba(181,144,106,.76)!important;background:rgba(99,72,50,.96)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.1),0 0 0 3px rgba(147,110,77,.08),0 4px 13px rgba(0,0,0,.3)!important}
+      .floating-composer .attach-media-button{position:absolute!important;z-index:5!important;top:0!important;right:65px!important;display:grid!important;width:48px!important;height:64px!important;place-items:center!important;border:0!important;border-radius:0!important;background:transparent!important;color:rgba(165,157,151,.48)!important;padding:0!important}.floating-composer .attach-media-button svg{display:none!important}.floating-composer .attach-media-button::before{display:block!important;content:"＊"!important;font-family:Georgia,"Times New Roman",serif!important;font-size:27px!important;line-height:1!important}
+      .floating-composer .send-paw-button{position:absolute!important;z-index:6!important;top:6px!important;right:6px!important;display:grid!important;width:50px!important;height:50px!important;place-items:center!important;border:0!important;border-radius:999px!important;background:rgba(118,118,118,.94)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.13),0 2px 7px rgba(0,0,0,.28)!important;color:#fff!important;padding:0!important;opacity:1!important}.floating-composer .send-paw-button .paw-icon{display:none!important}.floating-composer .send-paw-button::before{display:block!important;width:0!important;height:0!important;margin-left:4px!important;border-top:10px solid transparent!important;border-bottom:10px solid transparent!important;border-left:15px solid rgba(242,242,242,.94)!important;content:""!important}.floating-composer .send-paw-button:disabled{opacity:.86!important}
+      @media(max-width:620px){.floating-chat{gap:31px!important;padding-left:11px!important;padding-right:11px!important}.floating-chat .app-message-bubble{font-size:17px!important;line-height:1.43!important}.floating-chat .app-message-stack--assistant{padding:11px 13px 12px!important;border-radius:17px!important}}
       @media(max-height:430px){.floating-chat{gap:28px!important;padding-top:6px!important;padding-bottom:max(53px,env(safe-area-inset-bottom))!important}}
     </style>
-
     <title>NekoGPT Mobile</title>
     <script type="module" crossorigin src="/assets/index-DZWyabpL.js"></script>
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (()=>{
+        const SPEED_STORAGE_KEY='nekogpt:dialogue-text-speed';
+        const BASE_CHARACTERS_PER_SECOND=18;
+        const SPEED_VALUES=[1,2,3];
+        let speed=readSavedSpeed();
+        let animateAfter=performance.now()+1400;
+        const animatedRows=new WeakSet();
+        const activeFrames=new WeakMap();
+        function readSavedSpeed(){try{const value=Number(localStorage.getItem(SPEED_STORAGE_KEY));return SPEED_VALUES.includes(value)?value:1}catch{return 1}}
+        function saveSpeed(value){try{localStorage.setItem(SPEED_STORAGE_KEY,String(value))}catch{}}
+        function nextSpeed(value){return value===1?2:value===2?3:1}
+        function speedAriaLabel(value=speed){const language=document.documentElement.lang.toLowerCase();if(language.startsWith('pt'))return `Velocidade do texto: ${value}x. Toque para alterar.`;if(language.startsWith('es'))return `Velocidad del texto: ${value}x. Toca para cambiar.`;return `Text speed: ${value}x. Tap to change.`}
+        function syncSpeedButton(){const button=document.querySelector('.floating-composer .control-mic-button');if(!button)return;button.dataset.speedLabel=`×${speed}`;button.dataset.dialogueSpeed=String(speed);button.setAttribute('aria-label',speedAriaLabel());button.setAttribute('title',speedAriaLabel());button.setAttribute('aria-pressed','false')}
+        function splitGraphemes(text){if(typeof Intl!=='undefined'&&'Segmenter'in Intl){const Segmenter=Intl.Segmenter;if(Segmenter){const segmenter=new Segmenter(undefined,{granularity:'grapheme'});return Array.from(segmenter.segment(text),entry=>entry.segment)}}return Array.from(text)}
+        function renderRevealedText(spans,sets,revealed){let remaining=revealed;for(let i=0;i<spans.length;i+=1){const chars=sets[i];const count=Math.max(0,Math.min(chars.length,remaining));spans[i].textContent=chars.slice(0,count).join('');remaining-=count}}
+        function finishRow(row,spans,sets){renderRevealedText(spans,sets,sets.reduce((sum,chars)=>sum+chars.length,0));row.removeAttribute('aria-busy');row.classList.remove('is-dialogue-typing');activeFrames.delete(row)}
+        function animateRow(row){if(animatedRows.has(row)||row.closest('.history-overlay'))return;const spans=Array.from(row.querySelectorAll('.app-message-content'));if(!spans.length)return;animatedRows.add(row);const sets=spans.map(span=>splitGraphemes(span.textContent||''));const total=sets.reduce((sum,chars)=>sum+chars.length,0);if(!total||matchMedia('(prefers-reduced-motion: reduce)').matches)return;row.setAttribute('aria-busy','true');row.classList.add('is-dialogue-typing');renderRevealedText(spans,sets,0);let revealed=0,carry=0,previous=performance.now();const step=now=>{const delta=Math.min(80,Math.max(0,now-previous));previous=now;carry+=(delta*BASE_CHARACTERS_PER_SECOND*speed)/1000;const increment=Math.floor(carry);if(increment>0){carry-=increment;revealed=Math.min(total,revealed+increment);renderRevealedText(spans,sets,revealed)}if(revealed>=total){finishRow(row,spans,sets);return}activeFrames.set(row,requestAnimationFrame(step))};activeFrames.set(row,requestAnimationFrame(step))}
+        function processRow(row){if(performance.now()<animateAfter){animatedRows.add(row);return}animateRow(row)}
+        function processAdded(node){if(!(node instanceof HTMLElement))return;if(node.matches('.floating-messages .app-message-line--assistant'))processRow(node);node.querySelectorAll('.floating-messages .app-message-line--assistant').forEach(processRow);if(node.matches('.control-mic-button')||node.querySelector('.control-mic-button'))syncSpeedButton()}
+        document.querySelectorAll('.floating-messages .app-message-line--assistant').forEach(row=>animatedRows.add(row));
+        document.addEventListener('click',event=>{const target=event.target instanceof Element?event.target.closest('.floating-composer .control-mic-button'):null;if(!target)return;event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();speed=nextSpeed(speed);saveSpeed(speed);syncSpeedButton();target.animate([{transform:'scale(1)'},{transform:'scale(.92)'},{transform:'scale(1)'}],{duration:160,easing:'ease-out'})},true);
+        const observer=new MutationObserver(mutations=>{for(const mutation of mutations)mutation.addedNodes.forEach(processAdded);syncSpeedButton()});observer.observe(document.body,{childList:true,subtree:true});syncSpeedButton();
+      })();
+    </script>
   </body>
 </html>
