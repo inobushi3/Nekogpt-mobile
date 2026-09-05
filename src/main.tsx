@@ -7,6 +7,7 @@ import './styles.css';
 import './dialogue-reference.css';
 import './dialogue-effects.css';
 import './dialogue-message-layout.css';
+import './runtime-polish.css';
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
