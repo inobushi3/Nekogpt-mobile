@@ -9,19 +9,26 @@
   pointer-events: auto !important;
 }
 
-/* Keep the animated canvas on its own compositor layer. This avoids unrelated
- * page painting work while dragging/pinching the Live2D model. */
+/* Keep the animated canvas isolated from the rest of the page and make touch
+ * gestures belong to the Live2D surface immediately instead of waiting for the
+ * browser's scroll/pinch arbitration. */
 .live2d-stage {
   contain: strict;
+  isolation: isolate;
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
   backface-visibility: hidden;
-  transform: translateZ(0);
+  transform: translate3d(0, 0, 0);
   will-change: transform;
 }
 
 .live2d-stage canvas {
   backface-visibility: hidden;
-  transform: translateZ(0);
-  will-change: contents;
+  transform: translate3d(0, 0, 0);
+  transform-origin: center center;
+  will-change: transform;
 }
 
 /* Backdrop blur over a continuously redrawn WebGL/canvas surface is expensive
@@ -46,9 +53,21 @@
 }
 
 /* While the user is actively moving or pinching the model, prioritize input
- * latency and canvas redraws. The dark gradient remains, only the blur pass is
- * temporarily skipped until the pointer gesture ends. */
-.companion-screen:has(.live2d-stage--dragging) .floating-chat::before {
+ * latency and canvas redraws. The dark gradient remains, only expensive visual
+ * passes are temporarily skipped until the pointer gesture ends. */
+.companion-screen:has(.live2d-stage--dragging) .floating-chat::before,
+.companion-screen:has(.live2d-stage--gesture-boost) .floating-chat::before {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.live2d-stage--dragging .live2d-stage__glow,
+.live2d-stage--gesture-boost .live2d-stage__glow {
+  opacity: 0 !important;
+}
+
+.companion-screen:has(.live2d-stage--dragging) .floating-composer .composer-field,
+.companion-screen:has(.live2d-stage--gesture-boost) .floating-composer .composer-field {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
