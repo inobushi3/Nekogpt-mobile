@@ -6,6 +6,8 @@ let syntheticResize = false;
 let scheduledFrame = 0;
 const observedStages = new WeakSet<HTMLElement>();
 const stageObservers = new WeakMap<HTMLElement, ResizeObserver>();
+const stageCanvases = new WeakMap<HTMLElement, HTMLCanvasElement>();
+const stageMutationObservers = new WeakMap<HTMLElement, MutationObserver>();
 
 function stageRect(stage: HTMLElement) {
   const rect = stage.getBoundingClientRect();
@@ -15,8 +17,36 @@ function stageRect(stage: HTMLElement) {
   };
 }
 
+function rememberCanvas(stage: HTMLElement) {
+  const current = stage.querySelector('canvas');
+  if (current instanceof HTMLCanvasElement) {
+    stageCanvases.set(stage, current);
+    return current;
+  }
+  return stageCanvases.get(stage) || null;
+}
+
+function ensureCanvasAttached(stage: HTMLElement) {
+  let canvas = stage.querySelector('canvas');
+  if (canvas instanceof HTMLCanvasElement) {
+    stageCanvases.set(stage, canvas);
+    return canvas;
+  }
+
+  canvas = stageCanvases.get(stage) || null;
+  if (!(canvas instanceof HTMLCanvasElement)) return null;
+
+  // PIXI Application.destroy(true) removes the renderer canvas from the DOM.
+  // React keeps the same ref, so a retry can render forever into a detached
+  // canvas and the user only sees a black stage. Reattach that exact element.
+  const firstOverlay = [...stage.children].find((node) => node instanceof HTMLElement && node.tagName !== 'CANVAS') || null;
+  if (firstOverlay) stage.insertBefore(canvas, firstOverlay);
+  else stage.prepend(canvas);
+  return canvas;
+}
+
 function normalizeCanvas(stage: HTMLElement) {
-  const canvas = stage.querySelector('canvas');
+  const canvas = ensureCanvasAttached(stage);
   if (!(canvas instanceof HTMLCanvasElement)) return;
 
   canvas.style.position = 'absolute';
@@ -28,6 +58,7 @@ function normalizeCanvas(stage: HTMLElement) {
   canvas.style.maxHeight = 'none';
   canvas.style.opacity = '1';
   canvas.style.visibility = 'visible';
+  canvas.style.pointerEvents = 'none';
 
   const { width, height } = stageRect(stage);
   if (width >= 2 && height >= 2 && (canvas.width < 2 || canvas.height < 2)) {
@@ -56,6 +87,7 @@ function repairStage(stage: HTMLElement) {
   stage.style.height = '100%';
   stage.style.minWidth = '1px';
   stage.style.minHeight = '1px';
+  stage.style.overflow = 'hidden';
 
   const { width, height } = stageRect(stage);
   if (width < 2 || height < 2) {
@@ -82,8 +114,35 @@ function scheduleRepair() {
   });
 }
 
+function attachContextRecovery(stage: HTMLElement, canvas: HTMLCanvasElement) {
+  if (canvas.dataset.nekogptLive2dRecovery === '1') return;
+  canvas.dataset.nekogptLive2dRecovery = '1';
+
+  canvas.addEventListener('webglcontextlost', (event) => {
+    event.preventDefault();
+    stage.dataset.live2dContext = 'lost';
+    const alreadyReloaded = sessionStorage.getItem(CONTEXT_RELOAD_KEY) === '1';
+    if (!alreadyReloaded) {
+      sessionStorage.setItem(CONTEXT_RELOAD_KEY, '1');
+      window.setTimeout(() => window.location.reload(), 350);
+    }
+  });
+
+  canvas.addEventListener('webglcontextrestored', () => {
+    stage.dataset.live2dContext = 'ready';
+    sessionStorage.removeItem(CONTEXT_RELOAD_KEY);
+    scheduleRepair();
+  });
+}
+
 function attachStage(stage: HTMLElement) {
-  if (observedStages.has(stage)) return;
+  const currentCanvas = rememberCanvas(stage);
+  if (currentCanvas) attachContextRecovery(stage, currentCanvas);
+
+  if (observedStages.has(stage)) {
+    repairStage(stage);
+    return;
+  }
   observedStages.add(stage);
   repairStage(stage);
 
@@ -94,24 +153,14 @@ function attachStage(stage: HTMLElement) {
   observer.observe(stage);
   stageObservers.set(stage, observer);
 
-  const canvas = stage.querySelector('canvas');
-  if (canvas instanceof HTMLCanvasElement) {
-    canvas.addEventListener('webglcontextlost', (event) => {
-      event.preventDefault();
-      stage.dataset.live2dContext = 'lost';
-      const alreadyReloaded = sessionStorage.getItem(CONTEXT_RELOAD_KEY) === '1';
-      if (!alreadyReloaded) {
-        sessionStorage.setItem(CONTEXT_RELOAD_KEY, '1');
-        window.setTimeout(() => window.location.reload(), 350);
-      }
-    });
-
-    canvas.addEventListener('webglcontextrestored', () => {
-      stage.dataset.live2dContext = 'ready';
-      sessionStorage.removeItem(CONTEXT_RELOAD_KEY);
-      scheduleRepair();
-    });
-  }
+  const childObserver = new MutationObserver(() => {
+    const canvas = rememberCanvas(stage);
+    if (canvas) attachContextRecovery(stage, canvas);
+    ensureCanvasAttached(stage);
+    normalizeCanvas(stage);
+  });
+  childObserver.observe(stage, { childList: true });
+  stageMutationObservers.set(stage, childObserver);
 }
 
 function scanStages() {
@@ -146,6 +195,12 @@ export function installLive2DResilience() {
       window.setTimeout(scheduleRepair, 180);
     }
   });
+
+  // A small delayed sweep catches the exact React/Pixi cleanup/retry timing
+  // where the canvas is removed after the first mutation pass.
+  window.setInterval(() => {
+    if (document.visibilityState === 'visible') scanStages();
+  }, 1000);
 
   scanStages();
   scheduleRepair();
