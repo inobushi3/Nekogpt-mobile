@@ -12,5 +12,11 @@ export default defineConfig({
   build: {
     target: 'es2022',
     sourcemap: false,
+    assetsInlineLimit: 10 * 1024 * 1024,
+    rollupOptions: {
+      output: {
+        inlineDynamicImports: true,
+      },
+    },
   },
 });
