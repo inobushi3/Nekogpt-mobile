@@ -27,9 +27,101 @@ function getRenderProfile() {
   return {
     mobile,
     lowMemory,
-    resolution: mobile ? (lowMemory ? 0.65 : 0.8) : 1,
+    resolution: mobile ? (lowMemory ? 0.7 : 0.85) : 1,
     cubismMemoryMB: mobile ? 32 : 64,
   };
+}
+
+function getResizeElement(value: unknown): HTMLElement | null {
+  return value instanceof HTMLElement ? value : null;
+}
+
+function getValidTargetSize(target: HTMLElement | null) {
+  if (!target) return null;
+  const rect = target.getBoundingClientRect();
+  const width = Math.max(0, rect.width || target.clientWidth || 0);
+  const height = Math.max(0, rect.height || target.clientHeight || 0);
+  return width >= 2 && height >= 2 ? { width, height } : null;
+}
+
+function installResponsiveApplication(app: any, resizeTo: HTMLElement | null) {
+  let frame = 0;
+  let destroyed = false;
+  let resizeObserver: ResizeObserver | null = null;
+
+  const resizeNow = () => {
+    if (destroyed) return;
+    const size = getValidTargetSize(resizeTo);
+    if (!size) return;
+
+    try {
+      app?.renderer?.resize?.(Math.round(size.width), Math.round(size.height));
+    } catch {}
+
+    const canvas = app?.canvas as HTMLCanvasElement | undefined;
+    if (canvas) {
+      canvas.style.position = 'absolute';
+      canvas.style.inset = '0';
+      canvas.style.display = 'block';
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+      canvas.style.maxWidth = 'none';
+      canvas.style.maxHeight = 'none';
+      canvas.style.opacity = '1';
+      canvas.style.visibility = 'visible';
+    }
+  };
+
+  const scheduleResize = () => {
+    if (destroyed) return;
+    if (frame) cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      resizeNow();
+      requestAnimationFrame(resizeNow);
+    });
+  };
+
+  if (resizeTo && typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(scheduleResize);
+    resizeObserver.observe(resizeTo);
+  }
+
+  const onViewportChange = () => scheduleResize();
+  window.addEventListener('resize', onViewportChange, { passive: true });
+  window.addEventListener('orientationchange', onViewportChange, { passive: true });
+  window.addEventListener('pageshow', onViewportChange, { passive: true });
+  window.visualViewport?.addEventListener('resize', onViewportChange, { passive: true });
+
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      try {
+        app?.ticker?.start?.();
+      } catch {}
+      scheduleResize();
+      window.setTimeout(scheduleResize, 180);
+    }
+  };
+  document.addEventListener('visibilitychange', onVisibilityChange);
+
+  const originalDestroy = typeof app?.destroy === 'function' ? app.destroy.bind(app) : null;
+  if (originalDestroy) {
+    app.destroy = (...args: any[]) => {
+      destroyed = true;
+      if (frame) cancelAnimationFrame(frame);
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', onViewportChange);
+      window.removeEventListener('orientationchange', onViewportChange);
+      window.removeEventListener('pageshow', onViewportChange);
+      window.visualViewport?.removeEventListener('resize', onViewportChange);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      return originalDestroy(...args);
+    };
+  }
+
+  resizeNow();
+  requestAnimationFrame(scheduleResize);
+  window.setTimeout(scheduleResize, 120);
 }
 
 function installApplicationProfile(PIXI: typeof import('pixi.js')) {
@@ -39,22 +131,31 @@ function installApplicationProfile(PIXI: typeof import('pixi.js')) {
   if (typeof originalInit !== 'function') return;
 
   applicationInitPatched = true;
-  prototype.init = async function nekogptLive2DInit(options: Record<string, unknown> = {}) {
+  prototype.init = async function nekogptLive2DInit(options: Record<string, any> = {}) {
     const profile = getRenderProfile();
-    const result = await originalInit.call(this, {
+    const resizeTo = getResizeElement(options.resizeTo);
+
+    const stableOptions = {
       ...options,
       antialias: false,
       autoDensity: true,
       resolution: profile.resolution,
       preference: 'webgl',
-      powerPreference: 'high-performance',
+      powerPreference: 'default',
       preserveDrawingBuffer: false,
       clearBeforeRender: true,
-    });
+    };
 
-    // The model factory below receives this ticker, so model updates and Pixi
-    // rendering run on one clock instead of two independent animation loops.
+    const result = await originalInit.call(this, stableOptions);
+
+    // Keep model updates and Pixi rendering on one clock. This prevents mobile
+    // browsers from desynchronizing the Live2D update loop after page resume.
     activeApplicationTicker = this?.ticker || null;
+    try {
+      this?.ticker?.start?.();
+    } catch {}
+
+    installResponsiveApplication(this, resizeTo);
     return result;
   };
 }
@@ -69,8 +170,8 @@ function installModelFactoryProfile(
   if (typeof originalFrom !== 'function') return;
 
   live2DModelFactoryPatched = true;
-  modelClass.from = function nekogptLive2DFrom(source: unknown, options: Record<string, any> = {}) {
-    return originalFrom.call(this, source, {
+  modelClass.from = async function nekogptLive2DFrom(source: unknown, options: Record<string, any> = {}) {
+    const model = await originalFrom.call(this, source, {
       ...options,
       ticker: options.ticker || activeApplicationTicker || (PIXI.Ticker as any)?.shared,
       textureOptions: {
@@ -78,6 +179,17 @@ function installModelFactoryProfile(
         ...(options.textureOptions || {}),
       },
     });
+
+    // Some WebViews resume a Pixi object as invisible/non-renderable even though
+    // the model loaded correctly. Normalize these flags every time a model is created.
+    if (model) {
+      model.visible = true;
+      model.renderable = true;
+      model.alpha = 1;
+      model.cullable = false;
+    }
+
+    return model;
   };
 }
 
