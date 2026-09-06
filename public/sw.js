@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nekogpt-mobile-v3';
+const CACHE_NAME = 'nekogpt-mobile-v4';
 const APP_SHELL = [
   '/',
   '/manifest.webmanifest',
@@ -7,6 +7,9 @@ const APP_SHELL = [
   '/neko-icon-192.png',
   '/neko-icon-512.png',
   '/apple-touch-icon.png',
+  '/vendor/live2d/live2dcubismcore.min.js?v=4',
+  '/vendor/live2d/live2d.min.js?v=4',
+  '/night-scene-static-source.webp?v=4',
 ];
 
 self.addEventListener('install', (event) => {
