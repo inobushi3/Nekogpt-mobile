@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-revision="glass-send-v6-20260906">
+<html lang="pt-BR" data-revision="reference-glass-send-v7-20260906">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -33,7 +33,7 @@
         left: 0 !important;
       }
 
-      /* Send button: ready = flat cream; disabled = iPhone-like frosted glass. */
+      /* Ready = flat cream. Empty = milky transparent glass like the reference HUD buttons. */
       .floating-composer .send-paw-button,
       .floating-composer .send-paw-button:disabled {
         top: 50% !important;
@@ -44,7 +44,6 @@
         display: grid !important;
         place-items: center !important;
         padding: 0 !important;
-        position: absolute !important;
         overflow: hidden !important;
         border: 1px solid rgba(255, 250, 238, 0.94) !important;
         border-radius: 999px !important;
@@ -53,43 +52,34 @@
         color: #94546a !important;
         opacity: 1 !important;
         transform: translateY(-50%) !important;
-        transition: background 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease !important;
+        transition: background 160ms ease, border-color 160ms ease, color 160ms ease !important;
       }
 
       .floating-composer .send-paw-button .paw-icon {
         display: none !important;
       }
 
-      /* Outline-only arrow: no glyph box/fill behind it. */
+      /* Plain arrow glyph only: no square, circle, plate or fill behind it. */
       .floating-composer .send-paw-button::before {
-        content: "" !important;
-        position: absolute !important;
-        left: 50% !important;
-        top: 50% !important;
-        width: 2px !important;
-        height: 22px !important;
+        content: "↑" !important;
+        display: block !important;
+        width: auto !important;
+        height: auto !important;
         margin: 0 !important;
         border: 0 !important;
-        border-radius: 999px !important;
-        background: currentColor !important;
+        background: transparent !important;
         box-shadow: none !important;
-        transform: translate(-50%, -36%) !important;
+        text-shadow: none !important;
+        color: currentColor !important;
+        font-family: "Segoe UI Symbol", "Arial Unicode MS", Arial, sans-serif !important;
+        font-size: 35px !important;
+        font-weight: 300 !important;
+        line-height: 1 !important;
+        transform: translateY(-1px) !important;
       }
 
       .floating-composer .send-paw-button::after {
-        content: "" !important;
-        position: absolute !important;
-        left: 50% !important;
-        top: 11px !important;
-        width: 11px !important;
-        height: 11px !important;
-        margin: 0 !important;
-        border: 0 !important;
-        border-left: 2px solid currentColor !important;
-        border-top: 2px solid currentColor !important;
-        background: transparent !important;
-        box-shadow: none !important;
-        transform: translateX(-50%) rotate(45deg) !important;
+        display: none !important;
       }
 
       .floating-composer .send-paw-button:active:not(:disabled) {
@@ -97,23 +87,20 @@
       }
 
       .floating-composer .send-paw-button:disabled {
-        border-color: rgba(255, 255, 255, 0.30) !important;
-        background: rgba(255, 255, 255, 0.085) !important;
-        -webkit-backdrop-filter: blur(18px) saturate(170%) !important;
-        backdrop-filter: blur(18px) saturate(170%) !important;
+        border-color: rgba(255, 255, 255, 0.34) !important;
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.10)) !important;
+        -webkit-backdrop-filter: blur(11px) saturate(135%) !important;
+        backdrop-filter: blur(11px) saturate(135%) !important;
         box-shadow:
-          inset 0 1px 0 rgba(255, 255, 255, 0.20),
-          inset 0 -1px 0 rgba(255, 255, 255, 0.045),
-          0 5px 18px rgba(0, 0, 0, 0.12) !important;
-        color: rgba(255, 246, 231, 0.58) !important;
+          inset 0 1px 0 rgba(255, 255, 255, 0.24),
+          inset 0 -1px 0 rgba(255, 255, 255, 0.07) !important;
+        color: rgba(255, 255, 255, 0.82) !important;
       }
 
       .floating-composer .send-paw-button:disabled::before {
-        background: currentColor !important;
-      }
-
-      .floating-composer .send-paw-button:disabled::after {
         background: transparent !important;
+        color: rgba(255, 255, 255, 0.82) !important;
       }
 
       @media (max-width: 620px) {
@@ -125,13 +112,7 @@
         }
 
         .floating-composer .send-paw-button::before {
-          height: 21px !important;
-        }
-
-        .floating-composer .send-paw-button::after {
-          top: 10px !important;
-          width: 10px !important;
-          height: 10px !important;
+          font-size: 33px !important;
         }
       }
     </style>
