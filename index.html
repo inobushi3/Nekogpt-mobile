@@ -22,7 +22,7 @@
       // inside a .webp file. Rehydrate it before React paints the companion
       // screen instead of asking the browser to decode that text as WebP bytes.
       (() => {
-        fetch('/night-scene-static-source.webp?v=4', { cache: 'no-store' })
+        fetch('/night-scene-static-source.webp', { cache: 'no-store' })
           .then((response) => response.ok ? response.text() : Promise.reject(new Error('background fetch failed')))
           .then((text) => {
             const base64 = String(text || '').replace(/\s+/g, '');
@@ -40,8 +40,8 @@
 
     <!-- Preload both Live2D runtimes synchronously. Mobile Safari/WebViews were
          intermittently failing when these scripts were injected at runtime. -->
-    <script src="/vendor/live2d/live2dcubismcore.min.js?v=4"></script>
-    <script src="/vendor/live2d/live2d.min.js?v=4"></script>
+    <script src="/vendor/live2d/live2dcubismcore.min.js"></script>
+    <script src="/vendor/live2d/live2d.min.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
