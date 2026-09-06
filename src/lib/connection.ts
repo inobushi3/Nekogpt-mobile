@@ -47,12 +47,13 @@ function normalizePairingCode(value: unknown) {
 }
 
 function getDesktopLive2DModelKey(value: unknown) {
-  if (!value || typeof value !== 'object') return '';
+  if (!value || typeof value !== 'object') return null;
   const source = value as Record<string, unknown>;
+  const hasModelFields = 'modelId' in source || 'modelFile' in source || 'modelName' in source;
+  if (!hasModelFields) return null;
   const modelId = String(source.modelId || '').trim();
   const modelFile = String(source.modelFile || '').trim();
   const modelName = String(source.modelName || '').trim();
-  if (!modelId && !modelFile && !modelName) return '';
   return `${modelId}::${modelFile}::${modelName}`;
 }
 
@@ -162,7 +163,7 @@ export class NekoConnection {
 
   private observeDesktopLive2DModel(value: unknown) {
     const nextKey = getDesktopLive2DModelKey(value);
-    if (!nextKey) return;
+    if (nextKey === null) return;
 
     if (this.desktopLive2DModelKey === null) {
       this.desktopLive2DModelKey = nextKey;
