@@ -1,4 +1,4 @@
-/* Flat send-button polish: inactive = translucent gray, ready = cream. */
+/* Send button: cream when ready, milky translucent glass when inactive. */
 .floating-composer .send-paw-button,
 .floating-composer .send-paw-button:disabled {
   top: 50% !important;
@@ -7,14 +7,21 @@
   height: 50px !important;
   margin: 0 !important;
   place-items: center !important;
+  overflow: hidden !important;
   border: 1px solid rgba(255, 250, 238, 0.94) !important;
   border-radius: 999px !important;
   background: #fff6e4 !important;
-  box-shadow: none !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    0 4px 12px rgba(0, 0, 0, 0.14) !important;
   color: #94546a !important;
   opacity: 1 !important;
   transform: translateY(-50%) !important;
-  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease !important;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease !important;
 }
 
 .floating-composer .send-paw-button .paw-icon {
@@ -31,7 +38,7 @@
   box-shadow: none !important;
   text-shadow: none !important;
   content: "↑" !important;
-  color: #94546a !important;
+  color: currentColor !important;
   font-family: "Segoe UI Symbol", "Arial Unicode MS", Arial, sans-serif !important;
   font-size: 35px !important;
   font-weight: 300 !important;
@@ -44,18 +51,27 @@
 }
 
 .floating-composer .send-paw-button:active:not(:disabled) {
-  transform: translateY(-50%) !important;
+  transform: translateY(-50%) scale(0.96) !important;
 }
 
+/* Actual glass state from the reference: transparent, blurred and softly lit. */
 .floating-composer .send-paw-button:disabled {
-  border-color: rgba(255, 250, 238, 0.38) !important;
-  background: rgba(128, 128, 128, 0.24) !important;
-  color: rgba(214, 207, 198, 0.58) !important;
+  border-color: rgba(255, 255, 255, 0.42) !important;
+  background:
+    radial-gradient(circle at 32% 22%, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.08) 46%, rgba(255, 255, 255, 0.04) 72%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(115, 112, 119, 0.12)) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(138%) brightness(1.07) !important;
+  backdrop-filter: blur(14px) saturate(138%) brightness(1.07) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+    0 5px 14px rgba(0, 0, 0, 0.16) !important;
+  color: rgba(255, 255, 255, 0.88) !important;
 }
 
 .floating-composer .send-paw-button:disabled::before {
   background: transparent !important;
-  color: rgba(214, 207, 198, 0.58) !important;
+  color: rgba(255, 255, 255, 0.88) !important;
 }
 
 @media (max-width: 620px) {
