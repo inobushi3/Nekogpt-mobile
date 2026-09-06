@@ -1,0 +1,10 @@
+/* Default static night-scene background. Keep custom user backgrounds working. */
+.companion-screen:not(.has-mobile-background)::before {
+  background-image: url('/night-scene-static.webp') !important;
+  background-position: center center !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
+}

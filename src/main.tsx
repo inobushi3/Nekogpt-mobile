@@ -1,14 +1,13 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-import { installBackgroundVideo } from './background-video';
 import { installDialogueEffects } from './dialogue-effects';
 import { installDialogueWindow } from './dialogue-window';
 import { installLive2DDragSmoothing } from './live2d-drag-smoothing';
 import { installMobileHistoryPull } from './mobile-history-pull';
 import { installMobileHud } from './mobile-hud';
 import './styles.css';
-import './background-video.css';
+import './background-static.css';
 import './dialogue-reference.css';
 import './dialogue-effects.css';
 import './dialogue-animation-fix.css';
@@ -24,7 +23,6 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
   });
 }
 
-installBackgroundVideo();
 installDialogueWindow();
 installLive2DDragSmoothing();
 installMobileHud();
