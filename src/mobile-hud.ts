@@ -1,10 +1,20 @@
-const DEFAULT_CONTEXT_CHARS = 32_000;
-const LM_STUDIO_CONTEXT_CHARS = 14_000;
-const MOBILE_CONTEXT_HISTORY_MESSAGES = 23;
+const CONTEXT_TOKEN_RATIO = 4;
+const CONTEXT_MESSAGE_OVERHEAD_CHARS = 16;
+const CONTEXT_LIMIT_TOKENS = 8_000;
+const CONTEXT_LIMIT_CHARS = CONTEXT_LIMIT_TOKENS * CONTEXT_TOKEN_RATIO;
+const ATTACHMENT_IMAGE_CONTEXT_CHARS = 360;
+const ATTACHMENT_PDF_CONTEXT_CHARS = 1_200;
+const ATTACHMENT_FILE_CONTEXT_CHARS = 520;
+
+type ContextAttachment = {
+  mimeType?: string;
+  text?: string;
+};
 
 type ContextMessage = {
   role: 'user' | 'assistant';
   content: string;
+  attachments?: ContextAttachment[];
 };
 
 type RpcSignal = {
@@ -14,20 +24,23 @@ type RpcSignal = {
 
 let installed = false;
 let intervalId = 0;
-let providerLabel = '';
 let contextMessages: ContextMessage[] = [];
 
 function clampPercent(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
-function hashText(value: string) {
-  let hash = 2166136261;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(36);
+function normalizeContextText(value: unknown) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function estimateAttachmentContextChars(attachment: ContextAttachment) {
+  const extractedText = normalizeContextText(attachment.text);
+  if (extractedText) return extractedText.length + CONTEXT_MESSAGE_OVERHEAD_CHARS;
+  const mimeType = normalizeContextText(attachment.mimeType).toLowerCase();
+  if (mimeType.startsWith('image/')) return ATTACHMENT_IMAGE_CONTEXT_CHARS;
+  if (mimeType === 'application/pdf') return ATTACHMENT_PDF_CONTEXT_CHARS;
+  return ATTACHMENT_FILE_CONTEXT_CHARS;
 }
 
 function contextLabel(percent: number) {
@@ -82,11 +95,19 @@ function normalizeContextMessages(value: unknown): ContextMessage[] {
     .map((entry) => {
       const message = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
       const role = message.role === 'assistant' ? 'assistant' : message.role === 'user' ? 'user' : null;
-      const content = typeof message.content === 'string' ? message.content.trim() : '';
-      return role && content ? { role, content } : null;
+      const content = normalizeContextText(message.content);
+      const attachments = Array.isArray(message.attachments)
+        ? message.attachments.map((item) => {
+            const attachment = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+            return {
+              mimeType: normalizeContextText(attachment.mimeType),
+              text: normalizeContextText(attachment.text),
+            };
+          })
+        : undefined;
+      return role && content ? { role, content, attachments } : null;
     })
-    .filter((message): message is ContextMessage => Boolean(message))
-    .slice(-MOBILE_CONTEXT_HISTORY_MESSAGES);
+    .filter((message): message is ContextMessage => Boolean(message));
 }
 
 function applyHistory(value: unknown) {
@@ -94,58 +115,18 @@ function applyHistory(value: unknown) {
   scanContext();
 }
 
-function applySnapshot(value: unknown) {
-  const snapshot = value && typeof value === 'object' ? value as Record<string, unknown> : {};
-  if (typeof snapshot.provider === 'string') providerLabel = snapshot.provider.trim();
-  scanContext();
-}
-
-function contextLimitChars() {
-  return /lm\s*studio/i.test(providerLabel)
-    ? LM_STUDIO_CONTEXT_CHARS
-    : DEFAULT_CONTEXT_CHARS;
-}
-
-function readOptimisticDomMessages() {
-  const messages: ContextMessage[] = [];
-  const lines = Array.from(
-    document.querySelectorAll<HTMLElement>('.history-messages .app-message-line, .floating-messages .app-message-line'),
-  );
-
-  for (const line of lines) {
-    if (line.classList.contains('is-dialogue-typing') || line.getAttribute('aria-busy') === 'true') continue;
-    const content = Array.from(line.querySelectorAll<HTMLElement>('.app-message-content'))
-      .map((node) => node.textContent || '')
-      .join('\n')
-      .trim();
-    if (!content) continue;
-    messages.push({
-      role: line.classList.contains('app-message-line--assistant') ? 'assistant' : 'user',
-      content,
-    });
-  }
-
-  return messages;
-}
-
-function currentEffectiveMessages() {
-  const combined = [...contextMessages];
-  const known = new Set(combined.map((message) => hashText(`${message.role}:${message.content}`)));
-
-  for (const message of readOptimisticDomMessages()) {
-    const hash = hashText(`${message.role}:${message.content}`);
-    if (known.has(hash)) continue;
-    known.add(hash);
-    combined.push(message);
-  }
-
-  return combined.slice(-MOBILE_CONTEXT_HISTORY_MESSAGES);
+function estimateCurrentContextChars() {
+  return contextMessages.reduce((total, message) => {
+    const textChars = normalizeContextText(message.content).length + CONTEXT_MESSAGE_OVERHEAD_CHARS;
+    const attachmentChars = (message.attachments || [])
+      .reduce((sum, attachment) => sum + estimateAttachmentContextChars(attachment), 0);
+    return total + textChars + attachmentChars;
+  }, 0);
 }
 
 function scanContext() {
-  const messages = currentEffectiveMessages();
-  const chars = messages.reduce((total, message) => total + message.content.length + 16, 0);
-  updateGauge((chars / contextLimitChars()) * 100);
+  const chars = estimateCurrentContextChars();
+  updateGauge((chars / CONTEXT_LIMIT_CHARS) * 100);
 }
 
 function syncMicTrigger() {
@@ -166,7 +147,6 @@ function syncMicTrigger() {
 function forwardMicClick() {
   const source = document.querySelector<HTMLButtonElement>('.floating-composer .control-mic-button');
   if (!source) return;
-
   source.classList.remove('control-mic-button');
   try {
     source.click();
@@ -192,21 +172,11 @@ function ensureMicTrigger(screen: HTMLElement) {
 
 function handleRelaySignal(event: Event) {
   const message = (event as CustomEvent<Record<string, unknown>>).detail || {};
-  if (message.type === 'companion.snapshot' || message.type === 'companion.snapshot.updated') {
-    applySnapshot(message.payload);
-    return;
-  }
-  if (message.type === 'chat.history') {
-    applyHistory(message.payload);
-  }
+  if (message.type === 'chat.history') applyHistory(message.payload);
 }
 
 function handleRpcSignal(event: Event) {
   const signal = (event as CustomEvent<RpcSignal>).detail || {};
-  if (signal.method === 'companion.snapshot') {
-    applySnapshot(signal.result);
-    return;
-  }
   if (signal.method === 'companion.chat.history') {
     applyHistory(signal.result);
     return;
@@ -222,7 +192,6 @@ function handleRpcSignal(event: Event) {
 function handlePhaseSignal(event: Event) {
   const detail = (event as CustomEvent<{ phase?: string }>).detail;
   if (detail?.phase !== 'disconnected') return;
-  providerLabel = '';
   contextMessages = [];
   updateGauge(0);
 }
