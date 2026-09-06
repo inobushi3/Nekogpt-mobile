@@ -1,0 +1,113 @@
+/* Typing indicator and lower chat shading. Kept isolated so Live2D/runtime code is untouched. */
+
+/* Restore the existing React `sending` indicator that dialogue-reference.css hides,
+ * and place it in the gap immediately above the composer. */
+.floating-chat .floating-messages .app-thinking {
+  position: absolute;
+  z-index: 8;
+  left: 50%;
+  bottom: -24px;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: auto;
+  min-width: 0;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #f4ead7;
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.floating-chat .floating-messages .app-thinking::before {
+  content: "Digitando";
+  margin-right: 3px;
+  color: #f4ead7;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.floating-chat .floating-messages .app-thinking span {
+  display: block;
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #f4ead7;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.72);
+  opacity: 0.38;
+  transform: translateY(0);
+  animation: nekogptTypingDot 1.05s infinite ease-in-out;
+}
+
+.floating-chat .floating-messages .app-thinking span:nth-child(2) {
+  animation-delay: 0.14s;
+}
+
+.floating-chat .floating-messages .app-thinking span:nth-child(3) {
+  animation-delay: 0.28s;
+}
+
+@keyframes nekogptTypingDot {
+  0%, 60%, 100% {
+    opacity: 0.34;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}
+
+/* Darker lower glass/blur while keeping the Live2D visible through it. */
+.floating-chat::before {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(3, 3, 3, 0.02) 0%,
+      rgba(3, 3, 3, 0.18) 13%,
+      rgba(3, 3, 3, 0.43) 31%,
+      rgba(3, 3, 3, 0.66) 54%,
+      rgba(3, 3, 3, 0.82) 76%,
+      rgba(3, 3, 3, 0.91) 100%
+    ) !important;
+  -webkit-backdrop-filter: blur(7px) saturate(100%) !important;
+  backdrop-filter: blur(7px) saturate(100%) !important;
+}
+
+@media (max-width: 620px) {
+  .floating-chat .floating-messages .app-thinking {
+    bottom: -23px;
+    height: 22px;
+    gap: 4px;
+  }
+
+  .floating-chat .floating-messages .app-thinking::before {
+    font-size: 13px;
+    margin-right: 2px;
+  }
+
+  .floating-chat .floating-messages .app-thinking span {
+    width: 5.5px;
+    height: 5.5px;
+    flex-basis: 5.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-chat .floating-messages .app-thinking span {
+    animation: none;
+    opacity: 0.72;
+  }
+}
