@@ -2,16 +2,32 @@ const SPEED_STORAGE_KEY = 'nekogpt:dialogue-text-speed';
 const BASE_CHARACTERS_PER_SECOND = 18;
 const SPEED_VALUES = [1, 2, 3] as const;
 const INITIAL_DIALOGUE_SETTLE_MS = 1100;
+const RECENT_ANIMATION_GUARD_MS = 5000;
 
 type DialogueSpeed = (typeof SPEED_VALUES)[number];
+
+type ActiveDialogueAnimation = {
+  id: string;
+  sourceTexts: string[];
+  graphemeSets: string[][];
+  signature: string;
+  total: number;
+  revealed: number;
+  carry: number;
+  previous: number;
+  row: HTMLElement | null;
+};
 
 let speed: DialogueSpeed = readSavedSpeed();
 let installed = false;
 let observer: MutationObserver | null = null;
 let dialogueLive = false;
 let settleTimer: number | null = null;
+let animationFrame: number | null = null;
+let activeAnimation: ActiveDialogueAnimation | null = null;
+let lastFinishedSignature = '';
+let lastFinishedAt = 0;
 const animatedRows = new WeakSet<HTMLElement>();
-const activeFrames = new WeakMap<HTMLElement, number>();
 
 function readSavedSpeed(): DialogueSpeed {
   try {
@@ -70,60 +86,142 @@ function splitGraphemes(text: string) {
   return Array.from(text);
 }
 
-function renderRevealedText(spans: HTMLElement[], graphemeSets: string[][], revealed: number) {
-  let remaining = revealed;
-  for (let index = 0; index < spans.length; index += 1) {
-    const graphemes = graphemeSets[index];
-    const visibleCount = Math.max(0, Math.min(graphemes.length, remaining));
-    spans[index].textContent = graphemes.slice(0, visibleCount).join('');
-    remaining -= visibleCount;
-  }
+function latestAssistantRow() {
+  const rows = document.querySelectorAll<HTMLElement>('.floating-messages .app-message-line--assistant');
+  return rows.length ? rows[rows.length - 1] : null;
 }
 
-function finishRowAnimation(row: HTMLElement, spans: HTMLElement[], graphemeSets: string[][]) {
-  renderRevealedText(spans, graphemeSets, graphemeSets.reduce((sum, graphemes) => sum + graphemes.length, 0));
+function animationSignature(sourceTexts: string[]) {
+  return sourceTexts.join('\u241e');
+}
+
+function visibleTextForSpan(graphemes: string[], remaining: number) {
+  const visibleCount = Math.max(0, Math.min(graphemes.length, remaining));
+  return graphemes.slice(0, visibleCount).join('');
+}
+
+function clearAnimationDecorations(row: HTMLElement | null) {
+  if (!row) return;
   row.removeAttribute('aria-busy');
   row.classList.remove('is-dialogue-typing');
-  activeFrames.delete(row);
+  row.removeAttribute('data-dialogue-animation-id');
+  row.querySelectorAll<HTMLElement>('.app-message-content').forEach((span) => {
+    span.removeAttribute('data-dialogue-visible');
+  });
+}
+
+function bindAnimationToCurrentRow(animation: ActiveDialogueAnimation) {
+  let row = animation.row;
+  if (!row?.isConnected || !row.matches('.floating-messages .app-message-line--assistant')) {
+    row = latestAssistantRow();
+  }
+  if (!row) return null;
+
+  if (animation.row && animation.row !== row) clearAnimationDecorations(animation.row);
+  animation.row = row;
+  animatedRows.add(row);
+  row.dataset.dialogueAnimationId = animation.id;
+  row.setAttribute('aria-busy', 'true');
+  row.classList.add('is-dialogue-typing');
+
+  const spans = Array.from(row.querySelectorAll<HTMLElement>('.app-message-content'));
+  let remaining = animation.revealed;
+  for (let index = 0; index < spans.length; index += 1) {
+    const graphemes = animation.graphemeSets[index] || [];
+    spans[index].dataset.dialogueVisible = visibleTextForSpan(graphemes, remaining);
+    remaining -= graphemes.length;
+  }
+  return row;
+}
+
+function cancelAnimationFrameIfNeeded() {
+  if (animationFrame === null) return;
+  window.cancelAnimationFrame(animationFrame);
+  animationFrame = null;
+}
+
+function finishActiveAnimation() {
+  const animation = activeAnimation;
+  if (!animation) return;
+  cancelAnimationFrameIfNeeded();
+  bindAnimationToCurrentRow(animation);
+  clearAnimationDecorations(animation.row);
+  lastFinishedSignature = animation.signature;
+  lastFinishedAt = performance.now();
+  activeAnimation = null;
+  document.documentElement.classList.remove('dialogue-animation-active');
+  document.dispatchEvent(new CustomEvent('nekogpt:dialogue-animation-end'));
+}
+
+function stepActiveAnimation(now: number) {
+  const animation = activeAnimation;
+  if (!animation) {
+    animationFrame = null;
+    return;
+  }
+
+  const deltaMs = Math.min(80, Math.max(0, now - animation.previous));
+  animation.previous = now;
+  animation.carry += (deltaMs * BASE_CHARACTERS_PER_SECOND * speed) / 1000;
+  const increment = Math.floor(animation.carry);
+  if (increment > 0) {
+    animation.carry -= increment;
+    animation.revealed = Math.min(animation.total, animation.revealed + increment);
+  }
+
+  // React re-renders this chat frequently while Live2D/TTS state changes. Never
+  // keep references to the original text nodes: rebind every frame so a render,
+  // history gesture or scroll cannot replace the node and cancel the reveal.
+  bindAnimationToCurrentRow(animation);
+
+  if (animation.revealed >= animation.total) {
+    finishActiveAnimation();
+    return;
+  }
+
+  animationFrame = window.requestAnimationFrame(stepActiveAnimation);
 }
 
 function animateAssistantRow(row: HTMLElement) {
-  if (animatedRows.has(row) || row.closest('.history-overlay')) return;
+  if (row.closest('.history-overlay')) return;
   const spans = Array.from(row.querySelectorAll<HTMLElement>('.app-message-content'));
   if (!spans.length) return;
 
-  animatedRows.add(row);
-  const graphemeSets = spans.map((span) => splitGraphemes(span.textContent || ''));
+  const sourceTexts = spans.map((span) => span.textContent || '');
+  const graphemeSets = sourceTexts.map(splitGraphemes);
   const total = graphemeSets.reduce((sum, graphemes) => sum + graphemes.length, 0);
-  if (!total || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (!total || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    animatedRows.add(row);
+    return;
+  }
 
-  row.setAttribute('aria-busy', 'true');
-  row.classList.add('is-dialogue-typing');
-  renderRevealedText(spans, graphemeSets, 0);
+  const signature = animationSignature(sourceTexts);
+  const now = performance.now();
+  if (signature === lastFinishedSignature && now - lastFinishedAt < RECENT_ANIMATION_GUARD_MS) {
+    animatedRows.add(row);
+    return;
+  }
 
-  let revealed = 0;
-  let carry = 0;
-  let previous = performance.now();
+  if (activeAnimation) finishActiveAnimation();
 
-  const step = (now: number) => {
-    const deltaMs = Math.min(80, Math.max(0, now - previous));
-    previous = now;
-    carry += (deltaMs * BASE_CHARACTERS_PER_SECOND * speed) / 1000;
-    const increment = Math.floor(carry);
-    if (increment > 0) {
-      carry -= increment;
-      revealed = Math.min(total, revealed + increment);
-      renderRevealedText(spans, graphemeSets, revealed);
-    }
-
-    if (revealed >= total) {
-      finishRowAnimation(row, spans, graphemeSets);
-      return;
-    }
-    activeFrames.set(row, window.requestAnimationFrame(step));
+  animatedRows.add(row);
+  activeAnimation = {
+    id: `dialogue-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    sourceTexts,
+    graphemeSets,
+    signature,
+    total,
+    revealed: 0,
+    carry: 0,
+    previous: performance.now(),
+    row,
   };
 
-  activeFrames.set(row, window.requestAnimationFrame(step));
+  document.documentElement.classList.add('dialogue-animation-active');
+  bindAnimationToCurrentRow(activeAnimation);
+  document.dispatchEvent(new CustomEvent('nekogpt:dialogue-animation-start'));
+  cancelAnimationFrameIfNeeded();
+  animationFrame = window.requestAnimationFrame(stepActiveAnimation);
 }
 
 function markAssistantRowsComplete(root: ParentNode = document) {
@@ -174,26 +272,26 @@ function processMutations(mutations: MutationRecord[]) {
 
   if (!dialogueLive) {
     if (assistantRows.length) {
-      // Initial/history hydration can arrive after the page itself has loaded.
-      // Mark that whole batch as already read so reload/reconnect never types it again.
       assistantRows.forEach((row) => animatedRows.add(row));
       scheduleDialogueLiveMode();
     } else if (userRows.length) {
-      // An isolated optimistic user row means a real new turn has started.
       activateDialogueLiveMode();
     }
-  } else {
-    assistantRows.forEach(animateAssistantRow);
+  } else if (!activeAnimation && assistantRows.length) {
+    const newest = assistantRows[assistantRows.length - 1];
+    if (!animatedRows.has(newest)) animateAssistantRow(newest);
   }
 
+  // If React replaced the active row during any unrelated state update, the
+  // next animation frame rebinds it. Keeping the document lock active here also
+  // closes the tiny timing gap before the next frame.
+  if (activeAnimation) document.documentElement.classList.add('dialogue-animation-active');
   syncSpeedButton();
 }
 
 function handleComposerSubmit(event: SubmitEvent) {
   const form = event.target instanceof Element ? event.target.closest<HTMLFormElement>('.floating-composer') : null;
   if (!form) return;
-  // Arm live mode before React inserts the optimistic user message. The next
-  // assistant row is therefore the only row that receives the typewriter effect.
   activateDialogueLiveMode();
 }
 
