@@ -1,11 +1,21 @@
-const STORAGE_KEY = 'nekogpt:relationship-context-v1';
-const APPROX_CONTEXT_TOKENS = 32768;
+const DEFAULT_CONTEXT_CHARS = 32_000;
+const LM_STUDIO_CONTEXT_CHARS = 14_000;
+const MOBILE_CONTEXT_HISTORY_MESSAGES = 23;
 
-type StoredContext = { chars: number; hashes: string[] };
+type ContextMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+type RpcSignal = {
+  method?: string;
+  result?: unknown;
+};
 
 let installed = false;
-let reportedPercent: number | null = null;
 let intervalId = 0;
+let providerLabel = '';
+let contextMessages: ContextMessage[] = [];
 
 function clampPercent(value: number) {
   return Math.max(0, Math.min(100, Math.round(value)));
@@ -18,28 +28,6 @@ function hashText(value: string) {
     hash = Math.imul(hash, 16777619);
   }
   return (hash >>> 0).toString(36);
-}
-
-function readStoredContext(): StoredContext {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') as Partial<StoredContext>;
-    return {
-      chars: Number.isFinite(parsed.chars) ? Math.max(0, Number(parsed.chars)) : 0,
-      hashes: Array.isArray(parsed.hashes)
-        ? parsed.hashes.filter((item): item is string => typeof item === 'string').slice(-500)
-        : [],
-    };
-  } catch {
-    return { chars: 0, hashes: [] };
-  }
-}
-
-function saveStoredContext(value: StoredContext) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ chars: value.chars, hashes: value.hashes.slice(-500) }));
-  } catch {
-    // Storage may be unavailable in restricted browser contexts.
-  }
 }
 
 function contextLabel(percent: number) {
@@ -87,44 +75,77 @@ function updateGauge(percent: number) {
   gauge.title = contextLabel(cleanPercent);
 }
 
-function getReportedContextPercent() {
-  if (reportedPercent !== null) return reportedPercent;
-  const source = document.querySelector<HTMLElement>('[data-context-percent]');
-  const value = Number(source?.dataset.contextPercent);
-  return Number.isFinite(value) ? clampPercent(value) : null;
+function normalizeContextMessages(value: unknown): ContextMessage[] {
+  const source = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const rawMessages = Array.isArray(source.messages) ? source.messages : [];
+  return rawMessages
+    .map((entry) => {
+      const message = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
+      const role = message.role === 'assistant' ? 'assistant' : message.role === 'user' ? 'user' : null;
+      const content = typeof message.content === 'string' ? message.content.trim() : '';
+      return role && content ? { role, content } : null;
+    })
+    .filter((message): message is ContextMessage => Boolean(message))
+    .slice(-MOBILE_CONTEXT_HISTORY_MESSAGES);
 }
 
-function scanContext() {
-  const direct = getReportedContextPercent();
-  if (direct !== null) {
-    updateGauge(direct);
-    return;
-  }
+function applyHistory(value: unknown) {
+  contextMessages = normalizeContextMessages(value);
+  scanContext();
+}
 
-  const stored = readStoredContext();
-  const hashes = new Set(stored.hashes);
-  let chars = stored.chars;
-  const messageLines = Array.from(
+function applySnapshot(value: unknown) {
+  const snapshot = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  if (typeof snapshot.provider === 'string') providerLabel = snapshot.provider.trim();
+  scanContext();
+}
+
+function contextLimitChars() {
+  return /lm\s*studio/i.test(providerLabel)
+    ? LM_STUDIO_CONTEXT_CHARS
+    : DEFAULT_CONTEXT_CHARS;
+}
+
+function readOptimisticDomMessages() {
+  const messages: ContextMessage[] = [];
+  const lines = Array.from(
     document.querySelectorAll<HTMLElement>('.history-messages .app-message-line, .floating-messages .app-message-line'),
   );
 
-  for (const line of messageLines) {
+  for (const line of lines) {
     if (line.classList.contains('is-dialogue-typing') || line.getAttribute('aria-busy') === 'true') continue;
-    const text = Array.from(line.querySelectorAll<HTMLElement>('.app-message-content'))
+    const content = Array.from(line.querySelectorAll<HTMLElement>('.app-message-content'))
       .map((node) => node.textContent || '')
       .join('\n')
       .trim();
-    if (!text) continue;
-    const role = line.classList.contains('app-message-line--assistant') ? 'assistant' : 'user';
-    const hash = hashText(`${role}:${text}`);
-    if (hashes.has(hash)) continue;
-    hashes.add(hash);
-    chars += text.length;
+    if (!content) continue;
+    messages.push({
+      role: line.classList.contains('app-message-line--assistant') ? 'assistant' : 'user',
+      content,
+    });
   }
 
-  const nextStored = { chars, hashes: Array.from(hashes).slice(-500) };
-  saveStoredContext(nextStored);
-  updateGauge(((chars / 4) / APPROX_CONTEXT_TOKENS) * 100);
+  return messages;
+}
+
+function currentEffectiveMessages() {
+  const combined = [...contextMessages];
+  const known = new Set(combined.map((message) => hashText(`${message.role}:${message.content}`)));
+
+  for (const message of readOptimisticDomMessages()) {
+    const hash = hashText(`${message.role}:${message.content}`);
+    if (known.has(hash)) continue;
+    known.add(hash);
+    combined.push(message);
+  }
+
+  return combined.slice(-MOBILE_CONTEXT_HISTORY_MESSAGES);
+}
+
+function scanContext() {
+  const messages = currentEffectiveMessages();
+  const chars = messages.reduce((total, message) => total + message.content.length + 16, 0);
+  updateGauge((chars / contextLimitChars()) * 100);
 }
 
 function syncMicTrigger() {
@@ -146,10 +167,6 @@ function forwardMicClick() {
   const source = document.querySelector<HTMLButtonElement>('.floating-composer .control-mic-button');
   if (!source) return;
 
-  // The bottom disc is visually repurposed as the ×1/×2/×3 text-speed control.
-  // Temporarily remove its selector so the dialogue-speed capture listener does
-  // not consume this synthetic click; React still receives the button click and
-  // executes the real microphone toggle.
   source.classList.remove('control-mic-button');
   try {
     source.click();
@@ -173,6 +190,43 @@ function ensureMicTrigger(screen: HTMLElement) {
   return trigger;
 }
 
+function handleRelaySignal(event: Event) {
+  const message = (event as CustomEvent<Record<string, unknown>>).detail || {};
+  if (message.type === 'companion.snapshot' || message.type === 'companion.snapshot.updated') {
+    applySnapshot(message.payload);
+    return;
+  }
+  if (message.type === 'chat.history') {
+    applyHistory(message.payload);
+  }
+}
+
+function handleRpcSignal(event: Event) {
+  const signal = (event as CustomEvent<RpcSignal>).detail || {};
+  if (signal.method === 'companion.snapshot') {
+    applySnapshot(signal.result);
+    return;
+  }
+  if (signal.method === 'companion.chat.history') {
+    applyHistory(signal.result);
+    return;
+  }
+  if (signal.method === 'chat.send') {
+    const result = signal.result && typeof signal.result === 'object'
+      ? signal.result as Record<string, unknown>
+      : {};
+    if (result.history) applyHistory(result.history);
+  }
+}
+
+function handlePhaseSignal(event: Event) {
+  const detail = (event as CustomEvent<{ phase?: string }>).detail;
+  if (detail?.phase !== 'disconnected') return;
+  providerLabel = '';
+  contextMessages = [];
+  updateGauge(0);
+}
+
 function tickHud() {
   const screen = document.querySelector<HTMLElement>('.companion-screen');
   if (!screen) return;
@@ -186,18 +240,14 @@ export function installMobileHud() {
   if (installed || typeof document === 'undefined') return;
   installed = true;
 
-  window.addEventListener('nekogpt:context-percent', ((event: Event) => {
-    const custom = event as CustomEvent<{ percent?: number }>;
-    const value = Number(custom.detail?.percent);
-    if (!Number.isFinite(value)) return;
-    reportedPercent = clampPercent(value);
-    updateGauge(reportedPercent);
-  }) as EventListener);
+  window.addEventListener('nekogpt:relay-message', handleRelaySignal as EventListener);
+  window.addEventListener('nekogpt:rpc-response', handleRpcSignal as EventListener);
+  window.addEventListener('nekogpt:connection-phase', handlePhaseSignal as EventListener);
 
   const start = () => {
     tickHud();
     if (intervalId) window.clearInterval(intervalId);
-    intervalId = window.setInterval(tickHud, 700);
+    intervalId = window.setInterval(tickHud, 400);
   };
 
   if (document.readyState === 'loading') {
