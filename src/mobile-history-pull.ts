@@ -60,23 +60,53 @@ function scrollHistoryToBottom(attempt = 0) {
   if (attempt < 10) window.requestAnimationFrame(() => scrollHistoryToBottom(attempt + 1));
 }
 
+/*
+ * Mount the React history first and only then swap the compact viewport for it.
+ * Previously the class that hides .floating-messages was applied before React
+ * had rendered .history-overlay, leaving one empty frame: the visible "blink".
+ */
+function activateInlineHistoryWhenReady(attempt = 0) {
+  if (!inlineOpen) return;
+  if (document.querySelector('.history-overlay')) {
+    document.documentElement.classList.add('dialogue-inline-history');
+    scrollHistoryToBottom();
+    return;
+  }
+  if (attempt < 12) {
+    window.requestAnimationFrame(() => activateInlineHistoryWhenReady(attempt + 1));
+  } else {
+    inlineOpen = false;
+  }
+}
+
 function openInlineHistory() {
   if (inlineOpen || isScrollLocked()) return;
   const bubble = document.querySelector<HTMLButtonElement>('.floating-messages button.app-message-bubble');
   if (!bubble) return;
 
   inlineOpen = true;
-  document.documentElement.classList.add('dialogue-inline-history');
   bubble.click();
-  window.requestAnimationFrame(() => scrollHistoryToBottom());
+  window.requestAnimationFrame(() => activateInlineHistoryWhenReady());
+}
+
+function removeInlineClassAfterHistoryCloses(attempt = 0) {
+  if (!document.querySelector('.history-overlay') || attempt >= 12) {
+    document.documentElement.classList.remove('dialogue-inline-history');
+    return;
+  }
+  window.requestAnimationFrame(() => removeInlineClassAfterHistoryCloses(attempt + 1));
 }
 
 function closeInlineHistory() {
   if (!inlineOpen && !document.documentElement.classList.contains('dialogue-inline-history')) return;
   inlineOpen = false;
-  document.documentElement.classList.remove('dialogue-inline-history');
   const close = document.querySelector<HTMLButtonElement>('.history-header button');
-  close?.click();
+  if (close) {
+    close.click();
+    window.requestAnimationFrame(() => removeInlineClassAfterHistoryCloses());
+  } else {
+    document.documentElement.classList.remove('dialogue-inline-history');
+  }
 }
 
 function stopGestureDuringReveal(event: Event) {
