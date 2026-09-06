@@ -13,7 +13,6 @@ import './dialogue-message-layout.css';
 import './runtime-polish.css';
 import './mobile-hud.css';
 import './mobile-history-pull.css';
-import './vintage-chat-tint.css';
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
