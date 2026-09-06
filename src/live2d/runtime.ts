@@ -44,6 +44,24 @@ function getValidTargetSize(target: HTMLElement | null) {
   return width >= 2 && height >= 2 ? { width, height } : null;
 }
 
+function preserveReactCanvasDestroyArgs(args: any[]) {
+  const next = [...args];
+  const rendererOptions = next[0];
+
+  if (rendererOptions === true) {
+    next[0] = false;
+    return next;
+  }
+
+  if (rendererOptions && typeof rendererOptions === 'object' && !Array.isArray(rendererOptions)) {
+    next[0] = { ...rendererOptions, removeView: false };
+    return next;
+  }
+
+  if (rendererOptions === undefined) next[0] = false;
+  return next;
+}
+
 function installResponsiveApplication(app: any, resizeTo: HTMLElement | null) {
   let frame = 0;
   let destroyed = false;
@@ -115,7 +133,12 @@ function installResponsiveApplication(app: any, resizeTo: HTMLElement | null) {
       window.removeEventListener('pageshow', onViewportChange);
       window.visualViewport?.removeEventListener('resize', onViewportChange);
       document.removeEventListener('visibilitychange', onVisibilityChange);
-      return originalDestroy(...args);
+      if (activeApplicationTicker === app?.ticker) activeApplicationTicker = null;
+
+      // The canvas belongs to React. Live2DStage currently calls destroy(true)
+      // during retries; allowing Pixi to remove the view leaves React holding a
+      // ref to a detached canvas, so every later renderer works invisibly.
+      return originalDestroy(...preserveReactCanvasDestroyArgs(args));
     };
   }
 
@@ -148,8 +171,6 @@ function installApplicationProfile(PIXI: typeof import('pixi.js')) {
 
     const result = await originalInit.call(this, stableOptions);
 
-    // Keep model updates and Pixi rendering on one clock. This prevents mobile
-    // browsers from desynchronizing the Live2D update loop after page resume.
     activeApplicationTicker = this?.ticker || null;
     try {
       this?.ticker?.start?.();
@@ -180,8 +201,6 @@ function installModelFactoryProfile(
       },
     });
 
-    // Some WebViews resume a Pixi object as invisible/non-renderable even though
-    // the model loaded correctly. Normalize these flags every time a model is created.
     if (model) {
       model.visible = true;
       model.renderable = true;
