@@ -34,6 +34,8 @@ jobs:
         run: npm ci
 
       - name: Typecheck and build
+        env:
+          VITE_NEKOGPT_RELAY_URL: wss://nekogpt-mobile-relay.nekogptfree-ruan.workers.dev/connect
         run: npm run build
 
       - name: Upload production dist
