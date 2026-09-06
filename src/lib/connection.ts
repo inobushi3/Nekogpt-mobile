@@ -11,6 +11,7 @@ type EventListener = (message: RelayMessage) => void;
 type PhaseListener = (phase: ConnectionPhase, detail?: string) => void;
 
 type PendingRpc = {
+  method: string;
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   timer: number;
@@ -43,6 +44,16 @@ function resumeTokenKey(pairingCode: string) {
 
 function normalizePairingCode(value: unknown) {
   return String(value || '').trim().toUpperCase();
+}
+
+function getDesktopLive2DModelKey(value: unknown) {
+  if (!value || typeof value !== 'object') return '';
+  const source = value as Record<string, unknown>;
+  const modelId = String(source.modelId || '').trim();
+  const modelFile = String(source.modelFile || '').trim();
+  const modelName = String(source.modelName || '').trim();
+  if (!modelId && !modelFile && !modelName) return '';
+  return `${modelId}::${modelFile}::${modelName}`;
 }
 
 export function getSavedConnectionConfig() {
@@ -108,6 +119,8 @@ export class NekoConnection {
   private reconnecting = false;
   private manualDisconnect = false;
   private reconnectOnNextClose = false;
+  private desktopLive2DModelKey: string | null = null;
+  private refreshingLive2DModel = false;
 
   get connected() {
     return this.socket?.readyState === WebSocket.OPEN && this.approved;
@@ -147,9 +160,35 @@ export class NekoConnection {
     return !this.manualDisconnect && Boolean(this.relayUrl && this.pairingCode);
   }
 
+  private observeDesktopLive2DModel(value: unknown) {
+    const nextKey = getDesktopLive2DModelKey(value);
+    if (!nextKey) return;
+
+    if (this.desktopLive2DModelKey === null) {
+      this.desktopLive2DModelKey = nextKey;
+      return;
+    }
+
+    if (nextKey === this.desktopLive2DModelKey || this.refreshingLive2DModel) return;
+
+    this.desktopLive2DModelKey = nextKey;
+    this.refreshingLive2DModel = true;
+    this.reconnecting = true;
+    this.reconnectOnNextClose = true;
+    this.emitPhase('connecting');
+
+    if (this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING) {
+      this.socket.close(4010, 'desktop live2d model changed');
+      return;
+    }
+
+    this.scheduleReconnect();
+  }
+
   private scheduleReconnect() {
     if (!this.canReconnect()) {
       this.reconnecting = false;
+      this.refreshingLive2DModel = false;
       this.emitPhase('disconnected', copy('connection.error.desktopOffline'));
       return;
     }
@@ -160,7 +199,7 @@ export class NekoConnection {
       Math.round(RECONNECT_BASE_DELAY_MS * (1.55 ** Math.min(this.reconnectAttempts, 6))),
     );
     this.reconnectAttempts += 1;
-    this.emitPhase('connected', copy('connection.error.desktopOffline'));
+    this.emitPhase('connecting', copy('connection.error.desktopOffline'));
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
       if (!this.canReconnect()) return;
@@ -188,6 +227,8 @@ export class NekoConnection {
     this.reconnectOnNextClose = false;
     this.reconnectAttempts = 0;
     this.approved = false;
+    this.desktopLive2DModelKey = null;
+    this.refreshingLive2DModel = false;
     this.pairingCode = normalizePairingCode(pairingCode);
     try {
       const cleanedRelayUrl = cleanRelayUrl(relayUrl);
@@ -247,6 +288,7 @@ export class NekoConnection {
         this.scheduleReconnect();
       } else {
         this.reconnecting = false;
+        this.refreshingLive2DModel = false;
         this.emitPhase('disconnected');
       }
     });
@@ -265,6 +307,7 @@ export class NekoConnection {
     this.manualDisconnect = true;
     this.reconnecting = false;
     this.reconnectOnNextClose = false;
+    this.refreshingLive2DModel = false;
     this.approved = false;
     this.socket?.close(1000, 'client disconnect');
     this.socket = null;
@@ -285,6 +328,7 @@ export class NekoConnection {
     localStorage.removeItem(SAVED_PAIRING_CODE_KEY);
     localStorage.removeItem(SAVED_RELAY_URL_KEY);
     this.pairingCode = '';
+    this.desktopLive2DModelKey = null;
   }
 
   private rejectPending(error: Error) {
@@ -306,7 +350,7 @@ export class NekoConnection {
       this.approved = false;
       this.reconnectOnNextClose = true;
       this.rejectPending(new Error(copy('connection.error.desktopOffline')));
-      this.emitPhase('connected', copy('connection.error.desktopOffline'));
+      this.emitPhase('connecting', copy('connection.error.desktopOffline'));
       this.socket?.close(4002, 'desktop offline');
       return;
     }
@@ -324,6 +368,7 @@ export class NekoConnection {
       }
       this.approved = true;
       this.reconnecting = false;
+      this.refreshingLive2DModel = false;
       this.reconnectOnNextClose = false;
       this.reconnectAttempts = 0;
       this.emitPhase('connected');
@@ -352,8 +397,14 @@ export class NekoConnection {
       if (!pending || !response.id) return;
       window.clearTimeout(pending.timer);
       this.pendingRpc.delete(response.id);
-      if (response.ok) pending.resolve(response.result);
-      else pending.reject(new Error(response.error || copy('connection.error.rpcFailed')));
+      if (response.ok) {
+        pending.resolve(response.result);
+        if (pending.method === 'companion.snapshot') {
+          this.observeDesktopLive2DModel(response.result);
+        }
+      } else {
+        pending.reject(new Error(response.error || copy('connection.error.rpcFailed')));
+      }
       return;
     }
     if (message.type === 'live2d.bundle.chunk') {
@@ -377,6 +428,9 @@ export class NekoConnection {
       }
       return;
     }
+    if (message.type === 'companion.snapshot' || message.type === 'companion.snapshot.updated') {
+      this.observeDesktopLive2DModel(message.payload);
+    }
     this.emitEvent(message);
   }
 
@@ -396,6 +450,7 @@ export class NekoConnection {
         reject(new Error(`O comando ${method} excedeu o tempo limite.`));
       }, timeoutMs);
       this.pendingRpc.set(id, {
+        method,
         resolve: (value) => resolve(value as T),
         reject,
         timer,
@@ -406,6 +461,7 @@ export class NekoConnection {
 
   async requestLive2DBundle() {
     const metadata = await this.rpc<Live2DBundleMetadata>('live2d.bundle', undefined, BUNDLE_TIMEOUT_MS);
+    this.desktopLive2DModelKey = `${metadata.modelId || ''}::${metadata.modelFile || ''}::${metadata.modelName || ''}`;
     return new Promise<Live2DBundle>((resolve, reject) => {
       const timer = window.setTimeout(() => {
         this.pendingTransfers.delete(metadata.transferId);
