@@ -16,6 +16,7 @@ import './runtime-polish.css';
 import './mobile-hud.css';
 import './mobile-history-pull.css';
 import './send-button-polish.css';
+import './typing-indicator.css';
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
