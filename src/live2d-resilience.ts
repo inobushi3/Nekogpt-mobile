@@ -128,7 +128,10 @@ export function installLive2DResilience() {
   });
   mutationObserver.observe(document.documentElement, { childList: true, subtree: true });
 
-  const onViewportChange = () => scheduleRepair();
+  const onViewportChange = () => {
+    if (syntheticResize) return;
+    scheduleRepair();
+  };
   window.addEventListener('resize', onViewportChange, { passive: true });
   window.addEventListener('orientationchange', onViewportChange, { passive: true });
   window.addEventListener('pageshow', onViewportChange, { passive: true });
