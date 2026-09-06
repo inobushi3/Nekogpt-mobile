@@ -5,12 +5,9 @@ let startX = 0;
 let startY = 0;
 let lastY = 0;
 let revealLocked = false;
-let revealLockStartedAt = 0;
-let revealUnlockFrame: number | null = null;
-let revealObserver: MutationObserver | null = null;
+let revealUnlockTimer: number | null = null;
 
-const REVEAL_SETTLE_MS = 260;
-const REVEAL_MAX_LOCK_MS = 30000;
+const REVEAL_RELEASE_DELAY_MS = 140;
 
 function historyScroller() {
   return document.querySelector<HTMLElement>('.history-messages');
@@ -24,88 +21,35 @@ function hasTypingRow() {
 }
 
 function isScrollLocked() {
-  return revealLocked || hasTypingRow();
+  return revealLocked
+    || document.documentElement.classList.contains('dialogue-animation-active')
+    || hasTypingRow();
 }
 
-function cancelRevealUnlockFrame() {
-  if (revealUnlockFrame === null) return;
-  window.cancelAnimationFrame(revealUnlockFrame);
-  revealUnlockFrame = null;
-}
-
-function releaseRevealLock() {
-  revealLocked = false;
-  revealLockStartedAt = 0;
-  cancelRevealUnlockFrame();
-  document.documentElement.classList.remove('dialogue-scroll-locked');
-}
-
-function pollRevealLock() {
-  cancelRevealUnlockFrame();
-  if (!revealLocked) return;
-
-  const elapsed = performance.now() - revealLockStartedAt;
-  if (elapsed >= REVEAL_MAX_LOCK_MS) {
-    releaseRevealLock();
-    return;
-  }
-
-  if (hasTypingRow()) {
-    revealLockStartedAt = performance.now();
-    revealUnlockFrame = window.requestAnimationFrame(pollRevealLock);
-    return;
-  }
-
-  if (elapsed < REVEAL_SETTLE_MS) {
-    revealUnlockFrame = window.requestAnimationFrame(pollRevealLock);
-    return;
-  }
-
-  releaseRevealLock();
+function clearRevealUnlockTimer() {
+  if (revealUnlockTimer === null) return;
+  window.clearTimeout(revealUnlockTimer);
+  revealUnlockTimer = null;
 }
 
 function beginRevealLock() {
+  clearRevealUnlockTimer();
   revealLocked = true;
-  revealLockStartedAt = performance.now();
+  pulling = false;
   document.documentElement.classList.add('dialogue-scroll-locked');
-  cancelRevealUnlockFrame();
-  revealUnlockFrame = window.requestAnimationFrame(pollRevealLock);
 }
 
-function nodeContainsAssistantRow(node: Node) {
-  if (!(node instanceof HTMLElement)) return false;
-  return node.matches('.floating-messages .app-message-line--assistant')
-    || Boolean(node.querySelector('.floating-messages .app-message-line--assistant'));
-}
-
-function observeAssistantArrivals() {
-  revealObserver?.disconnect();
-  revealObserver = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      for (const node of mutation.addedNodes) {
-        if (nodeContainsAssistantRow(node)) {
-          beginRevealLock();
-          return;
-        }
-      }
-
-      if (
-        mutation.type === 'attributes'
-        && mutation.target instanceof HTMLElement
-        && mutation.target.matches('.floating-messages .app-message-line--assistant')
-        && (mutation.attributeName === 'aria-busy' || mutation.attributeName === 'class')
-      ) {
-        if (hasTypingRow()) beginRevealLock();
-      }
+function scheduleRevealUnlock() {
+  clearRevealUnlockTimer();
+  revealUnlockTimer = window.setTimeout(() => {
+    if (hasTypingRow() || document.documentElement.classList.contains('dialogue-animation-active')) {
+      scheduleRevealUnlock();
+      return;
     }
-  });
-
-  revealObserver.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['aria-busy', 'class'],
-  });
+    revealLocked = false;
+    document.documentElement.classList.remove('dialogue-scroll-locked');
+    revealUnlockTimer = null;
+  }, REVEAL_RELEASE_DELAY_MS);
 }
 
 function scrollHistoryToBottom(attempt = 0) {
@@ -139,6 +83,7 @@ function closeInlineHistory() {
 function stopGestureDuringReveal(event: Event) {
   pulling = false;
   if (event.cancelable) event.preventDefault();
+  event.stopImmediatePropagation();
   event.stopPropagation();
 }
 
@@ -224,11 +169,20 @@ function handleComposerPointer(event: Event) {
   if (target?.closest('.floating-composer')) closeInlineHistory();
 }
 
+function handleDialogueAnimationStart() {
+  beginRevealLock();
+}
+
+function handleDialogueAnimationEnd() {
+  scheduleRevealUnlock();
+}
+
 export function installMobileHistoryPull() {
   if (installed || typeof document === 'undefined') return;
   installed = true;
 
-  observeAssistantArrivals();
+  document.addEventListener('nekogpt:dialogue-animation-start', handleDialogueAnimationStart);
+  document.addEventListener('nekogpt:dialogue-animation-end', handleDialogueAnimationEnd);
   document.addEventListener('touchstart', handleTouchStart, { capture: true, passive: false });
   document.addEventListener('touchmove', handleTouchMove, { capture: true, passive: false });
   document.addEventListener('touchend', handleTouchEnd, { capture: true, passive: true });
