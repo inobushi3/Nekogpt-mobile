@@ -1,5 +1,9 @@
-/* Keep the existing chat appearance while making the typewriter React-safe. */
-.floating-chat .app-message-line--assistant.is-dialogue-typing .app-message-content {
+/* Keep the existing chat appearance while making the typewriter React-safe.
+ * The reveal is keyed by the data attribute on the text span itself, not by a
+ * React-owned class on the parent row. React may rewrite className while the
+ * app updates Live2D/TTS state; it does not own this transient data attribute.
+ */
+.floating-chat .app-message-content[data-dialogue-visible] {
   position: relative;
   color: transparent !important;
   -webkit-text-fill-color: transparent !important;
@@ -7,7 +11,7 @@
   will-change: auto !important;
 }
 
-.floating-chat .app-message-line--assistant.is-dialogue-typing .app-message-content::after {
+.floating-chat .app-message-content[data-dialogue-visible]::after {
   position: absolute;
   inset: 0;
   display: block;
