@@ -9,13 +9,39 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="NekoGPT" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/nekogpt-favicon-32.png?v=2" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/nekogpt-favicon-192.png?v=2" />
-    <link rel="apple-touch-icon" href="/nekogpt-apple-touch-icon.png?v=2" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/nekogpt-favicon-32.png?v=4" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/nekogpt-favicon-192.png?v=4" />
+    <link rel="apple-touch-icon" href="/nekogpt-apple-touch-icon.png?v=4" />
     <title>NekoGPT Mobile</title>
   </head>
   <body>
     <div id="root"></div>
+
+    <script>
+      // The uploaded night scene was accidentally committed as base64 text
+      // inside a .webp file. Rehydrate it before React paints the companion
+      // screen instead of asking the browser to decode that text as WebP bytes.
+      (() => {
+        fetch('/night-scene-static-source.webp?v=4', { cache: 'no-store' })
+          .then((response) => response.ok ? response.text() : Promise.reject(new Error('background fetch failed')))
+          .then((text) => {
+            const base64 = String(text || '').replace(/\s+/g, '');
+            if (!base64.startsWith('UklGR')) return;
+            const dataUrl = `data:image/webp;base64,${base64}`;
+            const probe = new Image();
+            probe.onload = () => {
+              document.documentElement.style.setProperty('--nekogpt-static-bg', `url("${dataUrl}")`);
+            };
+            probe.src = dataUrl;
+          })
+          .catch(() => undefined);
+      })();
+    </script>
+
+    <!-- Preload both Live2D runtimes synchronously. Mobile Safari/WebViews were
+         intermittently failing when these scripts were injected at runtime. -->
+    <script src="/vendor/live2d/live2dcubismcore.min.js?v=4"></script>
+    <script src="/vendor/live2d/live2d.min.js?v=4"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
