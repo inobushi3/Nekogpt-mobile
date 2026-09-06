@@ -1,7 +1,7 @@
-/* Static night-scene background. Pinned CDN URL avoids the black fallback caused by blocked/raw asset fetches. */
+/* Static night-scene background from the user's uploaded Night Scene Static image. */
 .companion-screen,
 .companion-screen.has-mobile-background {
-  background-image: url('https://cdn.jsdelivr.net/gh/inobushi3/Nekogpt-mobile@a746c829f697d53f70c14003f15f6ff99ef27e43/public/night-scene-static.webp') !important;
+  background-image: url('https://cdn.jsdelivr.net/gh/inobushi3/Nekogpt-mobile@b05c972530453fe2b5d2c73c92ba34ff5e2f4191/public/night-scene-static.webp') !important;
   background-position: center center !important;
   background-size: cover !important;
   background-repeat: no-repeat !important;
