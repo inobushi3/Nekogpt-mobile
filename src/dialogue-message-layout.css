@@ -1,12 +1,40 @@
 /*
  * Dialogue message layout overrides.
- * Main companion view: up to three chronological entries, with user messages
- * rendered as compact cream reply bubbles like the supplied reference.
+ * Main companion view: chronological entries stay inside a fixed lower
+ * viewport. As dialogue is pushed upward it fades out like the supplied video.
  * History view reuses the same visual language instead of generic chat cards.
  */
 
 .floating-messages {
   gap: 14px;
+  max-height: clamp(170px, 29svh, 310px);
+  overflow: hidden;
+  justify-content: flex-end;
+  padding-top: 30px;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, 0.16) 7%,
+    rgba(0, 0, 0, 0.58) 16%,
+    #000 29%,
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, 0.16) 7%,
+    rgba(0, 0, 0, 0.58) 16%,
+    #000 29%,
+    #000 100%
+  );
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+
+.floating-messages > * {
+  flex: 0 0 auto;
 }
 
 .floating-chat .app-message-line--user {
@@ -184,6 +212,8 @@
 @media (max-width: 620px) {
   .floating-messages {
     gap: 12px;
+    max-height: clamp(160px, 27svh, 280px);
+    padding-top: 26px;
   }
 
   .floating-chat .app-message-stack--user,
