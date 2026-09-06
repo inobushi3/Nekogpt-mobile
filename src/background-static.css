@@ -1,26 +1,21 @@
-/* Static night-scene background requested by the user.
- * Put it on the actual Live2D stage as well as the screen pseudo-layer so the
- * image cannot disappear behind the stage/canvas stacking context.
- */
+/* Static night-scene background. Pinned CDN URL avoids the black fallback caused by blocked/raw asset fetches. */
 .companion-screen,
-.live2d-stage,
-.companion-screen::before,
-.companion-screen.has-mobile-background::before {
-  background-image: url('/night-scene-static.webp') !important;
+.companion-screen.has-mobile-background {
+  background-image: url('https://cdn.jsdelivr.net/gh/inobushi3/Nekogpt-mobile@a746c829f697d53f70c14003f15f6ff99ef27e43/public/night-scene-static.webp') !important;
   background-position: center center !important;
   background-size: cover !important;
   background-repeat: no-repeat !important;
+  background-color: #000 !important;
 }
 
 .companion-screen::before,
 .companion-screen.has-mobile-background::before {
-  opacity: 1 !important;
-  transform: none !important;
-  transition: none !important;
+  background: none !important;
+  opacity: 0 !important;
 }
 
 .live2d-stage {
-  background-color: transparent !important;
+  background: transparent !important;
 }
 
 .live2d-stage canvas {
@@ -29,5 +24,5 @@
 
 .companion-screen::after,
 .companion-screen.has-mobile-background::after {
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.12)) !important;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.01), rgba(0, 0, 0, 0.08)) !important;
 }
