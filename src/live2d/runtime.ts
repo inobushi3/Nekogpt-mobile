@@ -111,7 +111,6 @@ function loadScript(id: string, src: string, ready: () => boolean) {
     script.id = id;
     script.src = src;
     script.async = true;
-    script.crossOrigin = 'anonymous';
     script.onload = () => {
       script.dataset.loaded = 'true';
       if (ready()) resolve();
