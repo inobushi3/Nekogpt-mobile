@@ -1,7 +1,8 @@
-/* Static night-scene background from the user's uploaded Night Scene Static image. */
+/* Static night-scene background. The actual image is restored at startup from
+   public/night-scene-static-source.webp, which currently contains base64 text. */
 .companion-screen,
 .companion-screen.has-mobile-background {
-  background-image: url('/night-scene-static.webp') !important;
+  background-image: var(--nekogpt-static-bg, url('/night-scene-static.webp')) !important;
   background-position: center center !important;
   background-size: cover !important;
   background-repeat: no-repeat !important;
