@@ -15,7 +15,8 @@ for (const tag of [...html.matchAll(/<link\b[^>]*>/gi)].map((match) => match[0])
   const href = tag.match(/\bhref=["']([^"']+)["']/i)?.[1];
   if (!href || (!href.startsWith('/assets/') && !href.startsWith('assets/'))) continue;
   const css = await readFile(localAssetPath(href), 'utf8');
-  html = html.replace(tag, `<style data-nekogpt-bundled-css>\n${css}\n</style>`);
+  const replacement = `<style data-nekogpt-bundled-css>\n${css}\n</style>`;
+  html = html.replace(tag, () => replacement);
 }
 
 for (const tag of [...html.matchAll(/<script\b[^>]*\bsrc=["'][^"']+["'][^>]*><\/script>/gi)].map((match) => match[0])) {
@@ -24,7 +25,8 @@ for (const tag of [...html.matchAll(/<script\b[^>]*\bsrc=["'][^"']+["'][^>]*><\/
   if (!src || (!src.startsWith('/assets/') && !src.startsWith('assets/'))) continue;
   let js = await readFile(localAssetPath(src), 'utf8');
   js = js.replace(/<\/script/gi, '<\\/script');
-  html = html.replace(tag, `<script type="module" data-nekogpt-bundled-js>\n${js}\n</script>`);
+  const replacement = `<script type="module" data-nekogpt-bundled-js>\n${js}\n</script>`;
+  html = html.replace(tag, () => replacement);
 }
 
 await mkdir(dirname(outputFile), { recursive: true });
