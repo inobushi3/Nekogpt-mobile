@@ -14,10 +14,11 @@ function historyScroller() {
 }
 
 function hasTypingRow() {
-  return Boolean(document.querySelector(
-    '.floating-messages .app-message-line--assistant.is-dialogue-typing, '
-      + '.floating-messages .app-message-line--assistant[aria-busy="true"]',
-  ));
+  return document.documentElement.classList.contains('dialogue-typing-active')
+    || Boolean(document.querySelector(
+      '.floating-messages .app-message-line--assistant.is-dialogue-typing, '
+        + '.floating-messages .app-message-line--assistant[aria-busy="true"]',
+    ));
 }
 
 function isScrollLocked() {
@@ -162,12 +163,6 @@ function handleWheel(event: WheelEvent) {
   openInlineHistory();
 }
 
-/*
- * A touch scroll can still synthesize a click on the message button on some
- * mobile browsers. That click toggles React's history overlay and was the
- * remaining source of the visible flash/cancel. Block only that generated
- * history click while the newest assistant line is being revealed.
- */
 function handleMessageBubbleClick(event: MouseEvent) {
   if (!isScrollLocked()) return;
   const target = event.target instanceof Element ? event.target : null;
