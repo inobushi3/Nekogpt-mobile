@@ -4,13 +4,108 @@ let inlineOpen = false;
 let startX = 0;
 let startY = 0;
 let lastY = 0;
+let revealLocked = false;
+let revealLockStartedAt = 0;
+let revealUnlockFrame: number | null = null;
+let revealObserver: MutationObserver | null = null;
+
+const REVEAL_SETTLE_MS = 260;
+const REVEAL_MAX_LOCK_MS = 30000;
 
 function historyScroller() {
   return document.querySelector<HTMLElement>('.history-messages');
 }
 
-function isDialogueTyping() {
-  return Boolean(document.querySelector('.floating-messages .app-message-line--assistant.is-dialogue-typing, .floating-messages .app-message-line--assistant[aria-busy="true"]'));
+function hasTypingRow() {
+  return Boolean(document.querySelector(
+    '.floating-messages .app-message-line--assistant.is-dialogue-typing, '
+      + '.floating-messages .app-message-line--assistant[aria-busy="true"]',
+  ));
+}
+
+function isScrollLocked() {
+  return revealLocked || hasTypingRow();
+}
+
+function cancelRevealUnlockFrame() {
+  if (revealUnlockFrame === null) return;
+  window.cancelAnimationFrame(revealUnlockFrame);
+  revealUnlockFrame = null;
+}
+
+function releaseRevealLock() {
+  revealLocked = false;
+  revealLockStartedAt = 0;
+  cancelRevealUnlockFrame();
+  document.documentElement.classList.remove('dialogue-scroll-locked');
+}
+
+function pollRevealLock() {
+  cancelRevealUnlockFrame();
+  if (!revealLocked) return;
+
+  const elapsed = performance.now() - revealLockStartedAt;
+  if (elapsed >= REVEAL_MAX_LOCK_MS) {
+    releaseRevealLock();
+    return;
+  }
+
+  if (hasTypingRow()) {
+    revealLockStartedAt = performance.now();
+    revealUnlockFrame = window.requestAnimationFrame(pollRevealLock);
+    return;
+  }
+
+  if (elapsed < REVEAL_SETTLE_MS) {
+    revealUnlockFrame = window.requestAnimationFrame(pollRevealLock);
+    return;
+  }
+
+  releaseRevealLock();
+}
+
+function beginRevealLock() {
+  revealLocked = true;
+  revealLockStartedAt = performance.now();
+  document.documentElement.classList.add('dialogue-scroll-locked');
+  cancelRevealUnlockFrame();
+  revealUnlockFrame = window.requestAnimationFrame(pollRevealLock);
+}
+
+function nodeContainsAssistantRow(node: Node) {
+  if (!(node instanceof HTMLElement)) return false;
+  return node.matches('.floating-messages .app-message-line--assistant')
+    || Boolean(node.querySelector('.floating-messages .app-message-line--assistant'));
+}
+
+function observeAssistantArrivals() {
+  revealObserver?.disconnect();
+  revealObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (nodeContainsAssistantRow(node)) {
+          beginRevealLock();
+          return;
+        }
+      }
+
+      if (
+        mutation.type === 'attributes'
+        && mutation.target instanceof HTMLElement
+        && mutation.target.matches('.floating-messages .app-message-line--assistant')
+        && (mutation.attributeName === 'aria-busy' || mutation.attributeName === 'class')
+      ) {
+        if (hasTypingRow()) beginRevealLock();
+      }
+    }
+  });
+
+  revealObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['aria-busy', 'class'],
+  });
 }
 
 function scrollHistoryToBottom(attempt = 0) {
@@ -23,13 +118,10 @@ function scrollHistoryToBottom(attempt = 0) {
 }
 
 function openInlineHistory() {
-  // Opening the history toggles React's history overlay. If that happens while
-  // the newest assistant row is still being revealed, React can replace the
-  // animated DOM node and the typewriter frame is lost, which looks like a
-  // blink/cancel. Keep the compact dialogue stable until the reveal finishes.
-  if (inlineOpen || isDialogueTyping()) return;
+  if (inlineOpen || isScrollLocked()) return;
   const bubble = document.querySelector<HTMLButtonElement>('.floating-messages button.app-message-bubble');
   if (!bubble) return;
+
   inlineOpen = true;
   document.documentElement.classList.add('dialogue-inline-history');
   bubble.click();
@@ -42,6 +134,12 @@ function closeInlineHistory() {
   document.documentElement.classList.remove('dialogue-inline-history');
   const close = document.querySelector<HTMLButtonElement>('.history-header button');
   close?.click();
+}
+
+function stopGestureDuringReveal(event: Event) {
+  pulling = false;
+  if (event.cancelable) event.preventDefault();
+  event.stopPropagation();
 }
 
 function handleTouchStart(event: TouchEvent) {
@@ -59,13 +157,13 @@ function handleTouchStart(event: TouchEvent) {
     return;
   }
 
-  if (isDialogueTyping()) {
+  if (!target.closest('.floating-messages') || event.touches.length !== 1) {
     pulling = false;
     return;
   }
 
-  if (!target.closest('.floating-messages') || event.touches.length !== 1) {
-    pulling = false;
+  if (isScrollLocked()) {
+    stopGestureDuringReveal(event);
     return;
   }
 
@@ -77,12 +175,13 @@ function handleTouchStart(event: TouchEvent) {
 }
 
 function handleTouchMove(event: TouchEvent) {
-  if (!pulling || event.touches.length !== 1) return;
-
-  if (isDialogueTyping()) {
-    pulling = false;
+  const target = event.target instanceof Element ? event.target : null;
+  if (target?.closest('.floating-messages') && isScrollLocked()) {
+    stopGestureDuringReveal(event);
     return;
   }
+
+  if (!pulling || event.touches.length !== 1) return;
 
   const touch = event.touches[0];
   const deltaX = touch.clientX - startX;
@@ -109,7 +208,14 @@ function handleTouchEnd() {
 
 function handleWheel(event: WheelEvent) {
   const target = event.target instanceof Element ? event.target : null;
-  if (!target?.closest('.floating-messages') || event.deltaY >= 0 || isDialogueTyping()) return;
+  if (!target?.closest('.floating-messages')) return;
+
+  if (isScrollLocked()) {
+    stopGestureDuringReveal(event);
+    return;
+  }
+
+  if (event.deltaY >= 0) return;
   openInlineHistory();
 }
 
@@ -122,11 +228,12 @@ export function installMobileHistoryPull() {
   if (installed || typeof document === 'undefined') return;
   installed = true;
 
-  document.addEventListener('touchstart', handleTouchStart, { capture: true, passive: true });
+  observeAssistantArrivals();
+  document.addEventListener('touchstart', handleTouchStart, { capture: true, passive: false });
   document.addEventListener('touchmove', handleTouchMove, { capture: true, passive: false });
   document.addEventListener('touchend', handleTouchEnd, { capture: true, passive: true });
   document.addEventListener('touchcancel', handleTouchEnd, { capture: true, passive: true });
-  document.addEventListener('wheel', handleWheel, { capture: true, passive: true });
+  document.addEventListener('wheel', handleWheel, { capture: true, passive: false });
   document.addEventListener('pointerdown', handleComposerPointer, true);
   document.addEventListener('submit', closeInlineHistory, true);
 }
