@@ -11,6 +11,7 @@ type EventListener = (message: RelayMessage) => void;
 type PhaseListener = (phase: ConnectionPhase, detail?: string) => void;
 
 type PendingRpc = {
+  method: string;
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   timer: number;
@@ -93,6 +94,11 @@ function decodeBase64Chunks(chunks: string[], byteLength: number) {
   return bytes;
 }
 
+function dispatchBrowserEvent(name: string, detail: unknown) {
+  if (typeof window === 'undefined' || typeof CustomEvent === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(name, { detail }));
+}
+
 export class NekoConnection {
   private socket: WebSocket | null = null;
   private phaseListeners = new Set<PhaseListener>();
@@ -125,10 +131,12 @@ export class NekoConnection {
 
   private emitPhase(phase: ConnectionPhase, detail?: string) {
     this.phaseListeners.forEach((listener) => listener(phase, detail));
+    dispatchBrowserEvent('nekogpt:connection-phase', { phase, detail });
   }
 
   private emitEvent(message: RelayMessage) {
     this.eventListeners.forEach((listener) => listener(message));
+    dispatchBrowserEvent('nekogpt:relay-message', message);
   }
 
   private clearPairingTimer() {
@@ -352,8 +360,12 @@ export class NekoConnection {
       if (!pending || !response.id) return;
       window.clearTimeout(pending.timer);
       this.pendingRpc.delete(response.id);
-      if (response.ok) pending.resolve(response.result);
-      else pending.reject(new Error(response.error || copy('connection.error.rpcFailed')));
+      if (response.ok) {
+        dispatchBrowserEvent('nekogpt:rpc-response', { method: pending.method, result: response.result });
+        pending.resolve(response.result);
+      } else {
+        pending.reject(new Error(response.error || copy('connection.error.rpcFailed')));
+      }
       return;
     }
     if (message.type === 'live2d.bundle.chunk') {
@@ -396,6 +408,7 @@ export class NekoConnection {
         reject(new Error(`O comando ${method} excedeu o tempo limite.`));
       }, timeoutMs);
       this.pendingRpc.set(id, {
+        method,
         resolve: (value) => resolve(value as T),
         reject,
         timer,
@@ -409,7 +422,7 @@ export class NekoConnection {
     return new Promise<Live2DBundle>((resolve, reject) => {
       const timer = window.setTimeout(() => {
         this.pendingTransfers.delete(metadata.transferId);
-        reject(new Error(copy('connection.error.bundleTimeout')));
+        reject(new Error(copy('connection.error.bundleTimeout'));
       }, BUNDLE_TIMEOUT_MS);
       this.pendingTransfers.set(metadata.transferId, {
         metadata,
