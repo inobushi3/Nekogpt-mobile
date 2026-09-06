@@ -27,124 +27,9 @@ function getRenderProfile() {
   return {
     mobile,
     lowMemory,
-    resolution: mobile ? (lowMemory ? 0.7 : 0.85) : 1,
+    resolution: mobile ? (lowMemory ? 0.65 : 0.8) : 1,
     cubismMemoryMB: mobile ? 32 : 64,
   };
-}
-
-function getResizeElement(value: unknown): HTMLElement | null {
-  return value instanceof HTMLElement ? value : null;
-}
-
-function getValidTargetSize(target: HTMLElement | null) {
-  if (!target) return null;
-  const rect = target.getBoundingClientRect();
-  const width = Math.max(0, rect.width || target.clientWidth || 0);
-  const height = Math.max(0, rect.height || target.clientHeight || 0);
-  return width >= 2 && height >= 2 ? { width, height } : null;
-}
-
-function preserveReactCanvasDestroyArgs(args: any[]) {
-  const next = [...args];
-  const rendererOptions = next[0];
-
-  if (rendererOptions === true) {
-    next[0] = false;
-    return next;
-  }
-
-  if (rendererOptions && typeof rendererOptions === 'object' && !Array.isArray(rendererOptions)) {
-    next[0] = { ...rendererOptions, removeView: false };
-    return next;
-  }
-
-  if (rendererOptions === undefined) next[0] = false;
-  return next;
-}
-
-function installResponsiveApplication(app: any, resizeTo: HTMLElement | null) {
-  let frame = 0;
-  let destroyed = false;
-  let resizeObserver: ResizeObserver | null = null;
-
-  const resizeNow = () => {
-    if (destroyed) return;
-    const size = getValidTargetSize(resizeTo);
-    if (!size) return;
-
-    try {
-      app?.renderer?.resize?.(Math.round(size.width), Math.round(size.height));
-    } catch {}
-
-    const canvas = app?.canvas as HTMLCanvasElement | undefined;
-    if (canvas) {
-      canvas.style.position = 'absolute';
-      canvas.style.inset = '0';
-      canvas.style.display = 'block';
-      canvas.style.width = '100%';
-      canvas.style.height = '100%';
-      canvas.style.maxWidth = 'none';
-      canvas.style.maxHeight = 'none';
-      canvas.style.opacity = '1';
-      canvas.style.visibility = 'visible';
-    }
-  };
-
-  const scheduleResize = () => {
-    if (destroyed) return;
-    if (frame) cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(() => {
-      frame = 0;
-      resizeNow();
-      requestAnimationFrame(resizeNow);
-    });
-  };
-
-  if (resizeTo && typeof ResizeObserver !== 'undefined') {
-    resizeObserver = new ResizeObserver(scheduleResize);
-    resizeObserver.observe(resizeTo);
-  }
-
-  const onViewportChange = () => scheduleResize();
-  window.addEventListener('resize', onViewportChange, { passive: true });
-  window.addEventListener('orientationchange', onViewportChange, { passive: true });
-  window.addEventListener('pageshow', onViewportChange, { passive: true });
-  window.visualViewport?.addEventListener('resize', onViewportChange, { passive: true });
-
-  const onVisibilityChange = () => {
-    if (document.visibilityState === 'visible') {
-      try {
-        app?.ticker?.start?.();
-      } catch {}
-      scheduleResize();
-      window.setTimeout(scheduleResize, 180);
-    }
-  };
-  document.addEventListener('visibilitychange', onVisibilityChange);
-
-  const originalDestroy = typeof app?.destroy === 'function' ? app.destroy.bind(app) : null;
-  if (originalDestroy) {
-    app.destroy = (...args: any[]) => {
-      destroyed = true;
-      if (frame) cancelAnimationFrame(frame);
-      resizeObserver?.disconnect();
-      window.removeEventListener('resize', onViewportChange);
-      window.removeEventListener('orientationchange', onViewportChange);
-      window.removeEventListener('pageshow', onViewportChange);
-      window.visualViewport?.removeEventListener('resize', onViewportChange);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      if (activeApplicationTicker === app?.ticker) activeApplicationTicker = null;
-
-      // The canvas belongs to React. Live2DStage currently calls destroy(true)
-      // during retries; allowing Pixi to remove the view leaves React holding a
-      // ref to a detached canvas, so every later renderer works invisibly.
-      return originalDestroy(...preserveReactCanvasDestroyArgs(args));
-    };
-  }
-
-  resizeNow();
-  requestAnimationFrame(scheduleResize);
-  window.setTimeout(scheduleResize, 120);
 }
 
 function installApplicationProfile(PIXI: typeof import('pixi.js')) {
@@ -154,29 +39,20 @@ function installApplicationProfile(PIXI: typeof import('pixi.js')) {
   if (typeof originalInit !== 'function') return;
 
   applicationInitPatched = true;
-  prototype.init = async function nekogptLive2DInit(options: Record<string, any> = {}) {
+  prototype.init = async function nekogptLive2DInit(options: Record<string, unknown> = {}) {
     const profile = getRenderProfile();
-    const resizeTo = getResizeElement(options.resizeTo);
-
-    const stableOptions = {
+    const result = await originalInit.call(this, {
       ...options,
       antialias: false,
       autoDensity: true,
       resolution: profile.resolution,
       preference: 'webgl',
-      powerPreference: 'default',
+      powerPreference: 'high-performance',
       preserveDrawingBuffer: false,
       clearBeforeRender: true,
-    };
-
-    const result = await originalInit.call(this, stableOptions);
+    });
 
     activeApplicationTicker = this?.ticker || null;
-    try {
-      this?.ticker?.start?.();
-    } catch {}
-
-    installResponsiveApplication(this, resizeTo);
     return result;
   };
 }
@@ -191,8 +67,8 @@ function installModelFactoryProfile(
   if (typeof originalFrom !== 'function') return;
 
   live2DModelFactoryPatched = true;
-  modelClass.from = async function nekogptLive2DFrom(source: unknown, options: Record<string, any> = {}) {
-    const model = await originalFrom.call(this, source, {
+  modelClass.from = function nekogptLive2DFrom(source: unknown, options: Record<string, any> = {}) {
+    return originalFrom.call(this, source, {
       ...options,
       ticker: options.ticker || activeApplicationTicker || (PIXI.Ticker as any)?.shared,
       textureOptions: {
@@ -200,15 +76,6 @@ function installModelFactoryProfile(
         ...(options.textureOptions || {}),
       },
     });
-
-    if (model) {
-      model.visible = true;
-      model.renderable = true;
-      model.alpha = 1;
-      model.cullable = false;
-    }
-
-    return model;
   };
 }
 
