@@ -82,8 +82,8 @@ function getBundleLimits() {
   };
 }
 
-function getMobileTextureLimit() {
-  if (!isMobileDevice()) return 0;
+function getTextureLimit() {
+  if (!isMobileDevice()) return 2048;
   return getDeviceMemoryGB() <= 4 ? 768 : 1024;
 }
 
@@ -273,8 +273,9 @@ function getPngDimensions(bytes: Uint8Array) {
 
 async function createAssetBlob(fileName: string, bytes: Uint8Array) {
   const type = contentTypeFor(fileName);
-  const original = new Blob([bytes], { type });
-  const textureLimit = getMobileTextureLimit();
+  const ownedBytes = new Uint8Array(bytes);
+  const original = new Blob([ownedBytes.buffer], { type });
+  const textureLimit = getTextureLimit();
   if (!textureLimit || type !== 'image/png') return original;
 
   const dimensions = getPngDimensions(bytes);
