@@ -12,6 +12,7 @@ let installed = false;
 let observer: MutationObserver | null = null;
 let dialogueLive = false;
 let settleTimer: number | null = null;
+let animationActive = false;
 const animatedRows = new WeakSet<HTMLElement>();
 const activeFrames = new WeakMap<HTMLElement, number>();
 
@@ -72,34 +73,38 @@ function splitGraphemes(text: string) {
   return Array.from(text);
 }
 
-/*
- * Important: never rewrite span.textContent during the reveal. React owns that
- * text and the Live2D/TTS state causes frequent React renders. Rewriting the
- * same text node from requestAnimationFrame made React restore the full string
- * on a render, producing the visible flash/cancel. The reveal now lives only in
- * a data attribute rendered by CSS, while React's real text remains untouched.
- */
 function renderRevealedText(spans: HTMLElement[], graphemeSets: string[][], revealed: number) {
   let remaining = revealed;
   for (let index = 0; index < spans.length; index += 1) {
-    const graphemes = graphemeSets[index];
+    const graphemes = graphemeSets[index] || [];
     const visibleCount = Math.max(0, Math.min(graphemes.length, remaining));
     spans[index].dataset.dialogueVisible = graphemes.slice(0, visibleCount).join('');
     remaining -= visibleCount;
   }
 }
 
-function finishRowAnimation(row: HTMLElement, spans: HTMLElement[]) {
+function latestAssistantRow() {
+  const rows = document.querySelectorAll<HTMLElement>('.floating-messages .app-message-line--assistant');
+  return rows.length ? rows[rows.length - 1] : null;
+}
+
+function finishRowAnimation(row: HTMLElement | null, spans: HTMLElement[]) {
   spans.forEach((span) => delete span.dataset.dialogueVisible);
-  row.removeAttribute('aria-busy');
-  row.classList.remove('is-dialogue-typing');
-  activeFrames.delete(row);
+  if (row) {
+    row.removeAttribute('aria-busy');
+    row.classList.remove('is-dialogue-typing');
+    activeFrames.delete(row);
+  }
+  animationActive = false;
+  document.documentElement.classList.remove('dialogue-typing-active');
   document.dispatchEvent(new CustomEvent(DIALOGUE_END_EVENT));
 }
 
-function animateAssistantRow(row: HTMLElement) {
-  if (animatedRows.has(row) || row.closest('.history-overlay')) return;
-  const spans = Array.from(row.querySelectorAll<HTMLElement>('.app-message-content'));
+function animateAssistantRow(initialRow: HTMLElement) {
+  if (animationActive || animatedRows.has(initialRow) || initialRow.closest('.history-overlay')) return;
+
+  let row: HTMLElement | null = initialRow;
+  let spans = Array.from(row.querySelectorAll<HTMLElement>('.app-message-content'));
   if (!spans.length) return;
 
   animatedRows.add(row);
@@ -107,6 +112,8 @@ function animateAssistantRow(row: HTMLElement) {
   const total = graphemeSets.reduce((sum, graphemes) => sum + graphemes.length, 0);
   if (!total || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
+  animationActive = true;
+  document.documentElement.classList.add('dialogue-typing-active');
   row.setAttribute('aria-busy', 'true');
   row.classList.add('is-dialogue-typing');
   document.dispatchEvent(new CustomEvent(DIALOGUE_START_EVENT));
@@ -116,9 +123,27 @@ function animateAssistantRow(row: HTMLElement) {
   let carry = 0;
   let previous = performance.now();
 
+  const rebindIfNeeded = () => {
+    if (row?.isConnected) return true;
+    const replacement = latestAssistantRow();
+    if (!replacement) return false;
+
+    row = replacement;
+    animatedRows.add(replacement);
+    spans = Array.from(replacement.querySelectorAll<HTMLElement>('.app-message-content'));
+    replacement.setAttribute('aria-busy', 'true');
+    replacement.classList.add('is-dialogue-typing');
+    renderRevealedText(spans, graphemeSets, revealed);
+    return true;
+  };
+
   const step = (now: number) => {
-    if (!row.isConnected) {
-      finishRowAnimation(row, spans);
+    if (!animationActive) return;
+
+    if (!rebindIfNeeded()) {
+      // React can briefly remove the compact row while reconciling. Do not end
+      // the animation; wait for the same newest assistant message to reappear.
+      window.requestAnimationFrame(step);
       return;
     }
 
@@ -136,10 +161,11 @@ function animateAssistantRow(row: HTMLElement) {
       finishRowAnimation(row, spans);
       return;
     }
-    activeFrames.set(row, window.requestAnimationFrame(step));
+
+    if (row) activeFrames.set(row, window.requestAnimationFrame(step));
   };
 
-  activeFrames.set(row, window.requestAnimationFrame(step));
+  if (row) activeFrames.set(row, window.requestAnimationFrame(step));
 }
 
 function markAssistantRowsComplete(root: ParentNode = document) {
@@ -164,14 +190,14 @@ function clearSettleTimer() {
 
 function activateDialogueLiveMode() {
   clearSettleTimer();
-  markAssistantRowsComplete();
+  if (!animationActive) markAssistantRowsComplete();
   dialogueLive = true;
 }
 
 function scheduleDialogueLiveMode() {
   clearSettleTimer();
   settleTimer = window.setTimeout(() => {
-    markAssistantRowsComplete();
+    if (!animationActive) markAssistantRowsComplete();
     dialogueLive = true;
     settleTimer = null;
   }, INITIAL_DIALOGUE_SETTLE_MS);
@@ -188,14 +214,19 @@ function processMutations(mutations: MutationRecord[]) {
     });
   }
 
+  if (animationActive) {
+    // A React rerender may replace the animated row. The RAF loop will rebind
+    // to the newest assistant row; never start a second animation here.
+    assistantRows.forEach((row) => animatedRows.add(row));
+    syncSpeedButton();
+    return;
+  }
+
   if (!dialogueLive) {
     if (assistantRows.length) {
-      // Initial/history hydration can arrive after the page itself has loaded.
-      // Mark that whole batch as already read so reload/reconnect never types it again.
       assistantRows.forEach((row) => animatedRows.add(row));
       scheduleDialogueLiveMode();
     } else if (userRows.length) {
-      // An isolated optimistic user row means a real new turn has started.
       activateDialogueLiveMode();
     }
   } else {
@@ -208,8 +239,6 @@ function processMutations(mutations: MutationRecord[]) {
 function handleComposerSubmit(event: SubmitEvent) {
   const form = event.target instanceof Element ? event.target.closest<HTMLFormElement>('.floating-composer') : null;
   if (!form) return;
-  // Arm live mode before React inserts the optimistic user message. The next
-  // assistant row is therefore the only row that receives the typewriter effect.
   activateDialogueLiveMode();
 }
 
