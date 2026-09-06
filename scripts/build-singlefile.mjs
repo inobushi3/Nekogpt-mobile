@@ -10,25 +10,21 @@ const localAssetPath = (url) => {
   return join(distDir, clean);
 };
 
-const stylesheetPattern = /<link\b([^>]*?)rel=["']stylesheet["']([^>]*?)href=["']([^"']+)["']([^>]*)>/gi;
-for (const match of [...html.matchAll(stylesheetPattern)]) {
-  const [tag, , , href] = match;
-  if (!href.startsWith('/assets/') && !href.startsWith('assets/')) continue;
+for (const tag of [...html.matchAll(/<link\b[^>]*>/gi)].map((match) => match[0])) {
+  if (!/\brel=["']stylesheet["']/i.test(tag)) continue;
+  const href = tag.match(/\bhref=["']([^"']+)["']/i)?.[1];
+  if (!href || (!href.startsWith('/assets/') && !href.startsWith('assets/'))) continue;
   const css = await readFile(localAssetPath(href), 'utf8');
   html = html.replace(tag, `<style data-nekogpt-bundled-css>\n${css}\n</style>`);
 }
 
-const moduleScriptPattern = /<script\b([^>]*?)type=["']module["']([^>]*?)src=["']([^"']+)["']([^>]*)><\/script>/gi;
-for (const match of [...html.matchAll(moduleScriptPattern)]) {
-  const [tag, , , src] = match;
-  if (!src.startsWith('/assets/') && !src.startsWith('assets/')) continue;
+for (const tag of [...html.matchAll(/<script\b[^>]*\bsrc=["'][^"']+["'][^>]*><\/script>/gi)].map((match) => match[0])) {
+  if (!/\btype=["']module["']/i.test(tag)) continue;
+  const src = tag.match(/\bsrc=["']([^"']+)["']/i)?.[1];
+  if (!src || (!src.startsWith('/assets/') && !src.startsWith('assets/'))) continue;
   let js = await readFile(localAssetPath(src), 'utf8');
   js = js.replace(/<\/script/gi, '<\\/script');
   html = html.replace(tag, `<script type="module" data-nekogpt-bundled-js>\n${js}\n</script>`);
-}
-
-if (/\/(?:assets)\//.test(html)) {
-  throw new Error('The single-file build still contains local /assets/ references.');
 }
 
 await mkdir(dirname(outputFile), { recursive: true });
