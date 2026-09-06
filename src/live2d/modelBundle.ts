@@ -8,10 +8,16 @@ type LoadedBundle = {
 
 type UnknownRecord = Record<string, unknown>;
 
+type ArchiveEntry = {
+  name: string;
+  normalized: string;
+  originalSize: number;
+};
+
 const TRANSPARENT_TEXTURE_DATA_URL = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-const LOW_MEMORY_ARCHIVE_LIMIT = 160 * 1024 * 1024;
+const LOW_MEMORY_ARCHIVE_LIMIT = 140 * 1024 * 1024;
 const DEFAULT_ARCHIVE_LIMIT = 320 * 1024 * 1024;
-const LOW_MEMORY_UNCOMPRESSED_LIMIT = 320 * 1024 * 1024;
+const LOW_MEMORY_UNCOMPRESSED_LIMIT = 240 * 1024 * 1024;
 const DEFAULT_UNCOMPRESSED_LIMIT = 700 * 1024 * 1024;
 
 function contentTypeFor(fileName: string) {
@@ -57,6 +63,11 @@ function looksLikeLocalAsset(value: string) {
   return /\.(?:moc3?|png|jpe?g|webp|json|wav|mp3|ogg|m4a|aac|flac)$/i.test(clean);
 }
 
+function isMobileDevice() {
+  return typeof window !== 'undefined'
+    && (window.innerWidth <= 820 || window.matchMedia?.('(pointer: coarse)').matches);
+}
+
 function getDeviceMemoryGB() {
   if (typeof navigator === 'undefined') return 8;
   const value = Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory);
@@ -64,11 +75,16 @@ function getDeviceMemoryGB() {
 }
 
 function getBundleLimits() {
-  const lowMemory = getDeviceMemoryGB() <= 4;
+  const lowMemory = isMobileDevice() && getDeviceMemoryGB() <= 4;
   return {
     archive: lowMemory ? LOW_MEMORY_ARCHIVE_LIMIT : DEFAULT_ARCHIVE_LIMIT,
     uncompressed: lowMemory ? LOW_MEMORY_UNCOMPRESSED_LIMIT : DEFAULT_UNCOMPRESSED_LIMIT,
   };
+}
+
+function getMobileTextureLimit() {
+  if (!isMobileDevice()) return 0;
+  return getDeviceMemoryGB() <= 4 ? 768 : 1024;
 }
 
 function addCollapsedPathVariants(paths: Set<string>, value: string) {
@@ -199,8 +215,6 @@ function rewriteModelSettingsForMobile(modelJson: unknown, modelFile: string, ur
           const url = resolveFileUrl(motion.File, baseDir, urls);
           if (!url) return null;
           const next = { ...motion, File: url };
-          // Motion audio is intentionally omitted on mobile. The companion uses its
-          // own TTS and retaining motion sounds can keep tens of MB alive for no gain.
           if ('Sound' in next) delete next.Sound;
           return next;
         })
@@ -214,53 +228,145 @@ function rewriteModelSettingsForMobile(modelJson: unknown, modelFile: string, ur
   return model;
 }
 
+function listArchiveEntries(bytes: Uint8Array) {
+  const entries: ArchiveEntry[] = [];
+  unzipSync(bytes, {
+    filter: (file) => {
+      const normalized = normalizePath(file.name);
+      if (normalized) {
+        entries.push({
+          name: file.name,
+          normalized,
+          originalSize: Math.max(0, Number(file.originalSize) || 0),
+        });
+      }
+      return false;
+    },
+  });
+  return entries;
+}
+
+function extractArchiveEntry(bytes: Uint8Array, entry: ArchiveEntry) {
+  const extracted = unzipSync(bytes, {
+    filter: (file) => file.name === entry.name,
+  });
+  return extracted[entry.name];
+}
+
+function getPngDimensions(bytes: Uint8Array) {
+  if (bytes.byteLength < 24) return null;
+  if (
+    bytes[0] !== 137
+    || bytes[1] !== 80
+    || bytes[2] !== 78
+    || bytes[3] !== 71
+    || bytes[12] !== 73
+    || bytes[13] !== 72
+    || bytes[14] !== 68
+    || bytes[15] !== 82
+  ) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const width = view.getUint32(16, false);
+  const height = view.getUint32(20, false);
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+
+async function createAssetBlob(fileName: string, bytes: Uint8Array) {
+  const type = contentTypeFor(fileName);
+  const original = new Blob([bytes], { type });
+  const textureLimit = getMobileTextureLimit();
+  if (!textureLimit || type !== 'image/png') return original;
+
+  const dimensions = getPngDimensions(bytes);
+  if (!dimensions || Math.max(dimensions.width, dimensions.height) <= textureLimit) return original;
+
+  const ratio = textureLimit / Math.max(dimensions.width, dimensions.height);
+  const width = Math.max(1, Math.round(dimensions.width * ratio));
+  const height = Math.max(1, Math.round(dimensions.height * ratio));
+  if (typeof createImageBitmap !== 'function' || typeof document === 'undefined') {
+    if (Math.max(dimensions.width, dimensions.height) > 4096) {
+      throw new Error(`A textura ${fileName} e grande demais para este celular.`);
+    }
+    return original;
+  }
+
+  let bitmap: ImageBitmap | null = null;
+  try {
+    bitmap = await createImageBitmap(original, {
+      resizeWidth: width,
+      resizeHeight: height,
+      resizeQuality: 'medium',
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d', { alpha: true });
+    if (!context) return original;
+    context.drawImage(bitmap, 0, 0, width, height);
+    const resized = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    canvas.width = 1;
+    canvas.height = 1;
+    if (resized) return resized;
+  } catch {
+    if (Math.max(dimensions.width, dimensions.height) > 4096) {
+      throw new Error(`A textura ${fileName} e grande demais para este celular.`);
+    }
+  } finally {
+    try {
+      bitmap?.close();
+    } catch {}
+  }
+  return original;
+}
+
 export async function loadModelBundle(bundle: Live2DBundle): Promise<LoadedBundle> {
   const limits = getBundleLimits();
   if (bundle.bytes.byteLength > limits.archive) {
     throw new Error('Este modelo Live2D e grande demais para carregar com seguranca neste dispositivo.');
   }
 
-  const files = unzipSync(bundle.bytes);
-  let uncompressedBytes = 0;
-  for (const fileName of Object.keys(files)) {
-    uncompressedBytes += files[fileName]?.byteLength || 0;
-    if (uncompressedBytes > limits.uncompressed) {
-      throw new Error('Este modelo Live2D usa memoria demais para este dispositivo.');
-    }
-  }
-
+  // First pass reads ZIP metadata only. Nothing is decompressed here, so a model
+  // with dozens of huge unused assets cannot immediately exhaust mobile memory.
+  const archiveEntries = listArchiveEntries(bundle.bytes);
   const modelFile = normalizePath(bundle.modelFile);
-  const modelFileKey = Object.keys(files).find(
-    (fileName) => normalizePath(fileName).toLowerCase() === modelFile.toLowerCase(),
+  const modelEntry = archiveEntries.find(
+    (entry) => entry.normalized.toLowerCase() === modelFile.toLowerCase(),
   );
-  const modelBytes = modelFileKey ? files[modelFileKey] : undefined;
-  if (!modelBytes) throw new Error(`O pacote não contém ${bundle.modelFile}.`);
+  if (!modelEntry) throw new Error(`O pacote não contém ${bundle.modelFile}.`);
 
+  // Extract only model3.json first so we know exactly which files the model uses.
+  const modelBytes = extractArchiveEntry(bundle.bytes, modelEntry);
+  if (!modelBytes) throw new Error(`O pacote não contém ${bundle.modelFile}.`);
   const modelJson = JSON.parse(new TextDecoder().decode(modelBytes)) as unknown;
   const baseDir = dirname(modelFile);
   const referencedPaths = new Set<string>();
   collectReferencedPaths(modelJson, baseDir, referencedPaths);
 
+  const assetEntries = archiveEntries.filter((entry) => {
+    if (entry.name === modelEntry.name || isAudioAsset(entry.normalized)) return false;
+    return referencedPaths.has(entry.normalized.toLowerCase());
+  });
+
+  const retainedBytes = modelEntry.originalSize
+    + assetEntries.reduce((total, entry) => total + entry.originalSize, 0);
+  if (retainedBytes > limits.uncompressed) {
+    throw new Error('Este modelo Live2D usa memoria demais para este dispositivo.');
+  }
+
   const urls = new Map<string, string>();
   const createdUrls: string[] = [];
 
   try {
-    // Process assets sequentially. The old Promise.all + FileReader data-URL path
-    // duplicated every texture in memory at once and was the main source of tab
-    // crashes on large models. Blob URLs keep one binary copy and are released on
-    // model disposal.
-    for (const fileName of Object.keys(files)) {
-      const normalized = normalizePath(fileName);
-      if (!normalized || normalized.toLowerCase() === modelFile.toLowerCase()) continue;
-      if (isAudioAsset(normalized)) continue;
-      if (referencedPaths.size && !referencedPaths.has(normalized.toLowerCase())) continue;
-
-      const bytes = files[fileName];
+    // Each referenced asset is decompressed separately and released before the next
+    // one. This avoids unzipSync keeping every texture/motion in RAM at the same time.
+    for (const entry of assetEntries) {
+      const bytes = extractArchiveEntry(bundle.bytes, entry);
       if (!bytes) continue;
-      const blob = new Blob([bytes], { type: contentTypeFor(normalized) });
+      const blob = await createAssetBlob(entry.normalized, bytes);
       const url = URL.createObjectURL(blob);
-      urls.set(normalized.toLowerCase(), url);
+      urls.set(entry.normalized.toLowerCase(), url);
       createdUrls.push(url);
+      await Promise.resolve();
     }
 
     const rewritten = rewriteModelSettingsForMobile(modelJson, modelFile, urls);
