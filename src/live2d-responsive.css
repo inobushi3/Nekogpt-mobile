@@ -1,0 +1,74 @@
+/*
+ * Live2D viewport hardening.
+ * Keep the renderer locked to the real companion viewport on phones, PWAs,
+ * orientation changes and browser UI resize events.
+ */
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.companion-screen {
+  width: 100vw !important;
+  width: 100dvw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  min-width: 0 !important;
+  min-height: 100svh !important;
+}
+
+.live2d-stage {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 1px !important;
+  min-height: 1px !important;
+  max-width: none !important;
+  max-height: none !important;
+  overflow: hidden !important;
+  contain: layout paint;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  touch-action: none;
+}
+
+.live2d-stage > canvas,
+.live2d-stage canvas {
+  position: absolute !important;
+  inset: 0 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 1px !important;
+  min-height: 1px !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  object-fit: fill !important;
+  transform: translateZ(0);
+}
+
+@media (orientation: portrait) {
+  .live2d-stage,
+  .live2d-stage > canvas {
+    width: 100% !important;
+    height: 100% !important;
+  }
+}
+
+@media (orientation: landscape) {
+  .live2d-stage,
+  .live2d-stage > canvas {
+    width: 100% !important;
+    height: 100% !important;
+  }
+}
