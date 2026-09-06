@@ -1,5 +1,6 @@
-/* Default static night-scene background. Keep custom user backgrounds working. */
-.companion-screen:not(.has-mobile-background)::before {
+/* Static night-scene background requested by the user. Force it even when stale custom-background state is present. */
+.companion-screen::before,
+.companion-screen.has-mobile-background::before {
   background-image: url('/night-scene-static.webp') !important;
   background-position: center center !important;
   background-size: cover !important;
@@ -7,4 +8,9 @@
   opacity: 1 !important;
   transform: none !important;
   transition: none !important;
+}
+
+.companion-screen::after,
+.companion-screen.has-mobile-background::after {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.03), rgba(0, 0, 0, 0.16)) !important;
 }
