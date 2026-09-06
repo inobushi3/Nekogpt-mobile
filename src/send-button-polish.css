@@ -1,4 +1,4 @@
-/* Final send-button polish: cream circular submit control with centered up arrow. */
+/* Flat send-button polish: inactive = translucent gray, ready = cream. */
 .floating-composer .send-paw-button,
 .floating-composer .send-paw-button:disabled {
   top: 50% !important;
@@ -9,13 +9,12 @@
   place-items: center !important;
   border: 1px solid rgba(255, 250, 238, 0.94) !important;
   border-radius: 999px !important;
-  background: linear-gradient(180deg, #fff8e9 0%, #ead8b9 100%) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.82),
-    0 3px 9px rgba(0, 0, 0, 0.28) !important;
+  background: #fff6e4 !important;
+  box-shadow: none !important;
   color: #94546a !important;
   opacity: 1 !important;
   transform: translateY(-50%) !important;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease !important;
 }
 
 .floating-composer .send-paw-button .paw-icon {
@@ -28,6 +27,9 @@
   height: auto !important;
   margin: 0 !important;
   border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
   content: "↑" !important;
   color: #94546a !important;
   font-family: "Segoe UI Symbol", "Arial Unicode MS", Arial, sans-serif !important;
@@ -42,11 +44,18 @@
 }
 
 .floating-composer .send-paw-button:active:not(:disabled) {
-  transform: translateY(-50%) scale(0.95) !important;
+  transform: translateY(-50%) !important;
+}
+
+.floating-composer .send-paw-button:disabled {
+  border-color: rgba(255, 250, 238, 0.38) !important;
+  background: rgba(128, 128, 128, 0.24) !important;
+  color: rgba(214, 207, 198, 0.58) !important;
 }
 
 .floating-composer .send-paw-button:disabled::before {
-  color: rgba(148, 84, 106, 0.72) !important;
+  background: transparent !important;
+  color: rgba(214, 207, 198, 0.58) !important;
 }
 
 @media (max-width: 620px) {
