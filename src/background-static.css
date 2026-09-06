@@ -1,16 +1,33 @@
-/* Static night-scene background requested by the user. Force it even when stale custom-background state is present. */
+/* Static night-scene background requested by the user.
+ * Put it on the actual Live2D stage as well as the screen pseudo-layer so the
+ * image cannot disappear behind the stage/canvas stacking context.
+ */
+.companion-screen,
+.live2d-stage,
 .companion-screen::before,
 .companion-screen.has-mobile-background::before {
   background-image: url('/night-scene-static.webp') !important;
   background-position: center center !important;
   background-size: cover !important;
   background-repeat: no-repeat !important;
+}
+
+.companion-screen::before,
+.companion-screen.has-mobile-background::before {
   opacity: 1 !important;
   transform: none !important;
   transition: none !important;
 }
 
+.live2d-stage {
+  background-color: transparent !important;
+}
+
+.live2d-stage canvas {
+  background: transparent !important;
+}
+
 .companion-screen::after,
 .companion-screen.has-mobile-background::after {
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.03), rgba(0, 0, 0, 0.16)) !important;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.12)) !important;
 }
