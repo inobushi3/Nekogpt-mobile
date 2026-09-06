@@ -51,6 +51,27 @@ function inlinePublicAssets(source) {
   return output;
 }
 
+function escapeInlineScript(source) {
+  return source.replace(/<\/script/gi, '<\\/script');
+}
+
+// Live2D's runtime loader normally creates <script src="..."> elements at
+// runtime. In the standalone bundle those paths become data: URLs, which are
+// not consistently executed by mobile browsers/WebViews. Preload both classic
+// runtimes inline before the Vite module so window.Live2DCubismCore/window.Live2D
+// already exist and the loader can return immediately.
+const live2dPrelude = [];
+for (const [name, rel] of [
+  ['cubism-core', 'vendor/live2d/live2dcubismcore.min.js'],
+  ['legacy-core', 'vendor/live2d/live2d.min.js'],
+]) {
+  let source = await readFile(join(distDir, rel), 'utf8');
+  source = escapeInlineScript(source);
+  live2dPrelude.push(`<script data-nekogpt-live2d-runtime="${name}">\n${source}\n</script>`);
+}
+const live2dPreludeHtml = live2dPrelude.join('\n');
+let live2dPreludeInjected = false;
+
 // The production HTML is intentionally standalone. It must not depend on
 // root-level Vercel assets, a service worker, or another deployment URL.
 html = html.replace(/<link\b[^>]*\brel=["']manifest["'][^>]*>/gi, '');
@@ -71,8 +92,10 @@ for (const tag of [...html.matchAll(/<script\b[^>]*\bsrc=["'][^"']+["'][^>]*><\/
   let js = await readFile(localAssetPath(src), 'utf8');
   js = js.replace(/navigator\.serviceWorker\.register\(\s*(["'`])\/sw\.js\1\s*\)/g, 'Promise.resolve()');
   js = inlinePublicAssets(js);
-  js = js.replace(/<\/script/gi, '<\\/script');
-  const replacement = `<script type="module" data-nekogpt-bundled-js>\n${js}\n</script>`;
+  js = escapeInlineScript(js);
+  const prelude = live2dPreludeInjected ? '' : `${live2dPreludeHtml}\n`;
+  live2dPreludeInjected = true;
+  const replacement = `${prelude}<script type="module" data-nekogpt-bundled-js>\n${js}\n</script>`;
   html = html.replace(tag, () => replacement);
 }
 
