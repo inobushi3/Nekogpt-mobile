@@ -7,7 +7,7 @@ let lastY = 0;
 let revealLocked = false;
 let revealUnlockTimer: number | null = null;
 
-const REVEAL_RELEASE_DELAY_MS = 140;
+const REVEAL_RELEASE_DELAY_MS = 180;
 
 function historyScroller() {
   return document.querySelector<HTMLElement>('.history-messages');
@@ -21,9 +21,7 @@ function hasTypingRow() {
 }
 
 function isScrollLocked() {
-  return revealLocked
-    || document.documentElement.classList.contains('dialogue-animation-active')
-    || hasTypingRow();
+  return revealLocked || hasTypingRow();
 }
 
 function clearRevealUnlockTimer() {
@@ -42,7 +40,7 @@ function beginRevealLock() {
 function scheduleRevealUnlock() {
   clearRevealUnlockTimer();
   revealUnlockTimer = window.setTimeout(() => {
-    if (hasTypingRow() || document.documentElement.classList.contains('dialogue-animation-active')) {
+    if (hasTypingRow()) {
       scheduleRevealUnlock();
       return;
     }
@@ -164,6 +162,19 @@ function handleWheel(event: WheelEvent) {
   openInlineHistory();
 }
 
+/*
+ * A touch scroll can still synthesize a click on the message button on some
+ * mobile browsers. That click toggles React's history overlay and was the
+ * remaining source of the visible flash/cancel. Block only that generated
+ * history click while the newest assistant line is being revealed.
+ */
+function handleMessageBubbleClick(event: MouseEvent) {
+  if (!isScrollLocked()) return;
+  const target = event.target instanceof Element ? event.target : null;
+  if (!target?.closest('.floating-messages button.app-message-bubble')) return;
+  stopGestureDuringReveal(event);
+}
+
 function handleComposerPointer(event: Event) {
   const target = event.target instanceof Element ? event.target : null;
   if (target?.closest('.floating-composer')) closeInlineHistory();
@@ -188,6 +199,7 @@ export function installMobileHistoryPull() {
   document.addEventListener('touchend', handleTouchEnd, { capture: true, passive: true });
   document.addEventListener('touchcancel', handleTouchEnd, { capture: true, passive: true });
   document.addEventListener('wheel', handleWheel, { capture: true, passive: false });
+  document.addEventListener('click', handleMessageBubbleClick, true);
   document.addEventListener('pointerdown', handleComposerPointer, true);
   document.addEventListener('submit', closeInlineHistory, true);
 }
