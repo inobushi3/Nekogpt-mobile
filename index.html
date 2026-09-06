@@ -38,9 +38,9 @@
       })();
     </script>
 
-    <!-- Preload both Live2D runtimes synchronously. Mobile Safari/WebViews were
-         intermittently failing when these scripts were injected at runtime. -->
-    <script src="/vendor/live2d/live2dcubismcore.min.js"></script>
+    <!-- Cubism modern is loaded by src/live2d/runtime.ts from Live2D's versioned
+         Core 05 endpoint. The old local Core expected a missing _em_module.wasm
+         sidecar and could leave Live2DCubismCore half-initialized. -->
     <script src="/vendor/live2d/live2d.min.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
