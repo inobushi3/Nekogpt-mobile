@@ -1,4 +1,4 @@
-const CORE_SCRIPT_URL = '/vendor/live2d/live2dcubismcore.min.js';
+const CORE_SCRIPT_URL = 'https://cubism.live2d.com/sdk-web/core/05/live2dcubismcore.min.js';
 const LEGACY_CORE_SCRIPT_URL = '/vendor/live2d/live2d.min.js';
 
 let runtimePromise: Promise<{
@@ -79,6 +79,16 @@ function installModelFactoryProfile(
   };
 }
 
+function isCubismCoreReady() {
+  const core = (window as any).Live2DCubismCore;
+  if (!core?.Version || typeof core.Version.csmGetVersion !== 'function') return false;
+  try {
+    return Number.isFinite(Number(core.Version.csmGetVersion()));
+  } catch {
+    return false;
+  }
+}
+
 function loadScript(id: string, src: string, ready: () => boolean) {
   if (ready()) return Promise.resolve();
   return new Promise<void>((resolve, reject) => {
@@ -88,14 +98,20 @@ function loadScript(id: string, src: string, ready: () => boolean) {
       existing = null;
     }
     if (existing) {
-      existing.addEventListener('load', () => resolve(), { once: true });
+      const finish = () => {
+        if (ready()) resolve();
+        else reject(new Error(`${src} foi carregado, mas o runtime Live2D não iniciou.`));
+      };
+      existing.addEventListener('load', finish, { once: true });
       existing.addEventListener('error', () => reject(new Error(`Falha ao carregar ${src}.`)), { once: true });
+      if (existing.dataset.loaded === 'true') finish();
       return;
     }
     const script = document.createElement('script');
     script.id = id;
     script.src = src;
     script.async = true;
+    script.crossOrigin = 'anonymous';
     script.onload = () => {
       script.dataset.loaded = 'true';
       if (ready()) resolve();
@@ -116,9 +132,13 @@ export function loadLive2DRuntime() {
   if (!runtimePromise) {
     runtimePromise = (async () => {
       await Promise.all([
-        loadScript('cubism-core', CORE_SCRIPT_URL, () => Boolean((window as any).Live2DCubismCore)),
+        loadScript('cubism-core', CORE_SCRIPT_URL, isCubismCoreReady),
         loadScript('live2d-legacy-core', LEGACY_CORE_SCRIPT_URL, () => Boolean((window as any).Live2D)),
       ]);
+
+      if (!isCubismCoreReady()) {
+        throw new Error('O Cubism Core foi carregado, mas não ficou pronto para renderizar o modelo.');
+      }
 
       const PIXI = await import('pixi.js');
       (window as any).PIXI = PIXI;
