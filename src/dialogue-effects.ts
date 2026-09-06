@@ -88,8 +88,15 @@ function latestAssistantRow() {
   return rows.length ? rows[rows.length - 1] : null;
 }
 
+function clearDialogueRevealAttributes() {
+  document
+    .querySelectorAll<HTMLElement>('.floating-messages .app-message-content[data-dialogue-visible]')
+    .forEach((span) => delete span.dataset.dialogueVisible);
+}
+
 function finishRowAnimation(row: HTMLElement | null, spans: HTMLElement[]) {
   spans.forEach((span) => delete span.dataset.dialogueVisible);
+  clearDialogueRevealAttributes();
   if (row) {
     row.removeAttribute('aria-busy');
     row.classList.remove('is-dialogue-typing');
@@ -114,35 +121,42 @@ function animateAssistantRow(initialRow: HTMLElement) {
 
   animationActive = true;
   document.documentElement.classList.add('dialogue-typing-active');
-  row.setAttribute('aria-busy', 'true');
-  row.classList.add('is-dialogue-typing');
   document.dispatchEvent(new CustomEvent(DIALOGUE_START_EVENT));
-  renderRevealedText(spans, graphemeSets, 0);
 
   let revealed = 0;
   let carry = 0;
   let previous = performance.now();
 
-  const rebindIfNeeded = () => {
-    if (row?.isConnected) return true;
-    const replacement = latestAssistantRow();
-    if (!replacement) return false;
+  /*
+   * React rerenders this row frequently while TTS/Live2D state changes. React
+   * owns className and can therefore remove our temporary typing class without
+   * replacing the DOM node. The visual reveal no longer depends on that class,
+   * and this repair pass refreshes the current spans + data attribute every
+   * frame so scrolling or a React commit cannot expose the full text early.
+   */
+  const repairAnimatedRow = () => {
+    if (!row?.isConnected) {
+      const replacement = latestAssistantRow();
+      if (!replacement) return false;
+      row = replacement;
+      animatedRows.add(replacement);
+    }
 
-    row = replacement;
-    animatedRows.add(replacement);
-    spans = Array.from(replacement.querySelectorAll<HTMLElement>('.app-message-content'));
-    replacement.setAttribute('aria-busy', 'true');
-    replacement.classList.add('is-dialogue-typing');
+    const currentSpans = Array.from(row.querySelectorAll<HTMLElement>('.app-message-content'));
+    if (!currentSpans.length) return false;
+    spans = currentSpans;
+    row.setAttribute('aria-busy', 'true');
+    row.classList.add('is-dialogue-typing');
     renderRevealedText(spans, graphemeSets, revealed);
     return true;
   };
 
+  repairAnimatedRow();
+
   const step = (now: number) => {
     if (!animationActive) return;
 
-    if (!rebindIfNeeded()) {
-      // React can briefly remove the compact row while reconciling. Do not end
-      // the animation; wait for the same newest assistant message to reappear.
+    if (!repairAnimatedRow()) {
       window.requestAnimationFrame(step);
       return;
     }
@@ -215,8 +229,6 @@ function processMutations(mutations: MutationRecord[]) {
   }
 
   if (animationActive) {
-    // A React rerender may replace the animated row. The RAF loop will rebind
-    // to the newest assistant row; never start a second animation here.
     assistantRows.forEach((row) => animatedRows.add(row));
     syncSpeedButton();
     return;
