@@ -15,6 +15,7 @@ import './mobile-hud.css';
 import './mobile-history-pull.css';
 import './send-button-polish.css';
 import './history-transition-polish.css';
+import './dialogue-animation-stability.css';
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
