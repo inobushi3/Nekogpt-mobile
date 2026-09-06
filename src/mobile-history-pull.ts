@@ -9,6 +9,10 @@ function historyScroller() {
   return document.querySelector<HTMLElement>('.history-messages');
 }
 
+function isDialogueTyping() {
+  return Boolean(document.querySelector('.floating-messages .app-message-line--assistant.is-dialogue-typing, .floating-messages .app-message-line--assistant[aria-busy="true"]'));
+}
+
 function scrollHistoryToBottom(attempt = 0) {
   const scroller = historyScroller();
   if (scroller) {
@@ -19,7 +23,11 @@ function scrollHistoryToBottom(attempt = 0) {
 }
 
 function openInlineHistory() {
-  if (inlineOpen) return;
+  // Opening the history toggles React's history overlay. If that happens while
+  // the newest assistant row is still being revealed, React can replace the
+  // animated DOM node and the typewriter frame is lost, which looks like a
+  // blink/cancel. Keep the compact dialogue stable until the reveal finishes.
+  if (inlineOpen || isDialogueTyping()) return;
   const bubble = document.querySelector<HTMLButtonElement>('.floating-messages button.app-message-bubble');
   if (!bubble) return;
   inlineOpen = true;
@@ -51,6 +59,11 @@ function handleTouchStart(event: TouchEvent) {
     return;
   }
 
+  if (isDialogueTyping()) {
+    pulling = false;
+    return;
+  }
+
   if (!target.closest('.floating-messages') || event.touches.length !== 1) {
     pulling = false;
     return;
@@ -65,6 +78,12 @@ function handleTouchStart(event: TouchEvent) {
 
 function handleTouchMove(event: TouchEvent) {
   if (!pulling || event.touches.length !== 1) return;
+
+  if (isDialogueTyping()) {
+    pulling = false;
+    return;
+  }
+
   const touch = event.touches[0];
   const deltaX = touch.clientX - startX;
   const deltaY = touch.clientY - startY;
@@ -90,7 +109,7 @@ function handleTouchEnd() {
 
 function handleWheel(event: WheelEvent) {
   const target = event.target instanceof Element ? event.target : null;
-  if (!target?.closest('.floating-messages') || event.deltaY >= 0) return;
+  if (!target?.closest('.floating-messages') || event.deltaY >= 0 || isDialogueTyping()) return;
   openInlineHistory();
 }
 
