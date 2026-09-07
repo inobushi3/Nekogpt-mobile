@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-revision="live2d-native-swap-v20-20260907">
+<html lang="pt-BR" data-revision="stable-context-reload-v21-20260907">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
@@ -27,16 +27,16 @@
 <body>
   <div id="root"></div>
   <div class="live2d-switch-mask" aria-live="polite" aria-label="Trocando de modelo"><span class="live2d-switch-mask__spinner" aria-hidden="true"></span><span>Trocando de modelo</span></div>
-  <script type="module" crossorigin src="https://nekogpt-mobile-7gliy8oyu-inobushi3s-projects.vercel.app/assets/index-j8B69zxv.js"></script>
   <script>
   (()=>{
     const HUD='https://nekogpt-mobile-p3wp6go4o-inobushi3s-projects.vercel.app';
-    const CONTEXT_LIMIT_CHARS=8000*4,OVERHEAD=16,IMG=360,PDF=1200,FILE=520;
+    const DEFAULT_CONTEXT_CHARS=32000,LM_STUDIO_CONTEXT_CHARS=14000,OVERHEAD=16,IMG=360,PDF=1200,FILE=520;
     const pending=new Map();
-    let history=[];
-    let activeSnapshotIdentity='',live2dSwap=null,live2dSwapMonitor=0;
+    let history=[],contextLimitChars=DEFAULT_CONTEXT_CHARS;
+    let relaySocket=null,pairApproved=false;
+    let activeModelIdentity='',candidateModelIdentity='',candidateModelHits=0,reloadingForModel=false;
     const clean=v=>String(v||'').replace(/\s+/g,' ').trim();
-    const clamp=v=>Math.max(0,Math.min(100,Math.round(v)));
+    const clamp=v=>Math.max(0,Math.min(100,v));
     const identityOf=(modelId,modelFile)=>`${clean(modelId)}\u0000${clean(modelFile)}`;
     const attachmentChars=a=>{const text=clean(a?.text);if(text)return text.length+OVERHEAD;const mime=clean(a?.mimeType).toLowerCase();if(mime.startsWith('image/'))return IMG;if(mime==='application/pdf')return PDF;return FILE};
     function ensure(){
@@ -49,70 +49,40 @@
     }
     function normalizeHistory(value){const src=value&&typeof value==='object'?value:{};const list=Array.isArray(src.messages)?src.messages:[];return list.map(m=>{if(!m||typeof m!=='object')return null;const role=m.role==='assistant'?'assistant':m.role==='user'?'user':null,content=clean(m.content);if(!role||!content)return null;return{role,content,attachments:Array.isArray(m.attachments)?m.attachments:[]}}).filter(Boolean)}
     function draftChars(){const field=document.querySelector('.floating-composer textarea,.floating-composer input[type="text"],.floating-composer [contenteditable="true"]');const value=field?.value??field?.textContent??'';const text=clean(value);let chars=text?text.length+OVERHEAD:0;if(document.querySelector('.floating-composer .media-preview-strip img,.floating-composer .media-preview-strip video'))chars+=IMG;return chars}
-    function percent(){const chars=history.reduce((sum,m)=>sum+m.content.length+OVERHEAD+m.attachments.reduce((n,a)=>n+attachmentChars(a),0),0)+draftChars();return clamp(chars/CONTEXT_LIMIT_CHARS*100)}
-    function paint(){const g=ensure();if(!g)return;const p=percent(),fill=g.querySelector('.relationship-gauge__fill'),heart=g.querySelector('.relationship-gauge__heart');if(fill)fill.style.width=`${1.88*p}px`;if(heart)heart.src=p>=100?`${HUD}/hp-icon-active.png`:`${HUD}/hp-icon-base.png`;g.dataset.percent=String(p);g.title=`Contexto do chat ${p}%`;g.setAttribute('aria-label',`Relacionamento · contexto do chat ${p}%`)}
+    function contextPercent(){const chars=history.reduce((sum,m)=>sum+m.content.length+OVERHEAD+m.attachments.reduce((n,a)=>n+attachmentChars(a),0),0)+draftChars();return clamp(chars/contextLimitChars*100)}
+    function paint(){const g=ensure();if(!g)return;const p=contextPercent(),display=Math.round(p),fill=g.querySelector('.relationship-gauge__fill'),heart=g.querySelector('.relationship-gauge__heart');if(fill)fill.style.width=`${p>0?Math.max(1,1.88*p):0}px`;if(heart)heart.src=p>=99.999?`${HUD}/hp-icon-active.png`:`${HUD}/hp-icon-base.png`;g.dataset.percent=String(display);g.title=`Contexto do chat ${display}%`;g.setAttribute('aria-label',`Relacionamento · contexto do chat ${display}%`)}
     function acceptHistory(value){history=normalizeHistory(value);paint()}
-    function collectHooks(fiber){const hooks=[];let hook=fiber?.memoizedState||null;while(hook&&hooks.length<48){hooks.push(hook);hook=hook.next||null}return hooks}
-    function findAppController(){
-      const root=document.getElementById('root');if(!root)return null;
-      const key=Object.keys(root).find(k=>k.startsWith('__reactContainer$'));const rootFiber=key?root[key]:null;if(!rootFiber)return null;
-      const stack=[rootFiber];
-      while(stack.length){
-        const fiber=stack.pop();if(!fiber)continue;
-        const hooks=collectHooks(fiber);
-        if(hooks.length>28){
-          const phase=hooks[3]?.memoizedState,bundle=hooks[5]?.memoizedState,bundleProgress=hooks[6]?.memoizedState,reloadBundle=hooks[28]?.queue?.dispatch;
-          if(typeof phase==='string'&&['connected','connecting','disconnected','error'].includes(phase)&&typeof reloadBundle==='function')return{phase,bundle,bundleProgress:typeof bundleProgress==='string'?bundleProgress:'',reloadBundle};
-        }
-        if(fiber.sibling)stack.push(fiber.sibling);if(fiber.child)stack.push(fiber.child);
-      }
-      return null;
-    }
     function showSwapMask(){document.querySelector('.live2d-switch-mask')?.classList.add('is-active')}
-    function hideSwapMask(){document.querySelector('.live2d-switch-mask')?.classList.remove('is-active')}
-    function clearSwapMonitor(){if(live2dSwapMonitor){clearInterval(live2dSwapMonitor);live2dSwapMonitor=0}}
-    function finishLive2DSwap(){clearSwapMonitor();live2dSwap=null;hideSwapMask()}
-    function triggerNativeBundleReload(attempt=0){
-      const swap=live2dSwap;if(!swap)return;
-      const controller=findAppController();
-      if(!controller||controller.phase!=='connected'){
-        if(attempt<20)setTimeout(()=>triggerNativeBundleReload(attempt+1),100);else finishLive2DSwap();
-        return;
-      }
-      swap.triggered=true;
-      controller.reloadBundle(value=>(Number(value)||0)+1);
-    }
-    function watchNativeLive2DSwap(){
-      clearSwapMonitor();
-      live2dSwapMonitor=setInterval(()=>{
-        const swap=live2dSwap;if(!swap){clearSwapMonitor();hideSwapMask();return}
-        const elapsed=Date.now()-swap.startedAt;
-        if(elapsed>12000){finishLive2DSwap();return}
-        const controller=findAppController();
-        if(!controller)return;
-        const busy=Boolean(controller.bundleProgress)||Boolean(document.querySelector('.live2d-stage__status'));
-        if(busy){swap.sawBusy=true;swap.readyTicks=0;return}
-        if(swap.sawBusy||elapsed>1800)swap.readyTicks+=1;
-        if(swap.readyTicks>=4)finishLive2DSwap();
-      },150);
-    }
-    function startLive2DSwap(targetIdentity){
-      if(!targetIdentity||live2dSwap)return;
-      live2dSwap={targetIdentity,startedAt:Date.now(),triggered:false,sawBusy:false,readyTicks:0};
-      showSwapMask();
-      triggerNativeBundleReload();
-      watchNativeLive2DSwap();
-    }
     function acceptSnapshot(value){
-      const s=value&&typeof value==='object'?value:{},modelId=clean(s.modelId),modelFile=clean(s.modelFile);if(!modelId||!modelFile)return;
+      const s=value&&typeof value==='object'?value:{};
+      const provider=clean(s.provider);
+      contextLimitChars=/lm\s*studio/i.test(provider)?LM_STUDIO_CONTEXT_CHARS:DEFAULT_CONTEXT_CHARS;
+      paint();
+      const modelId=clean(s.modelId),modelFile=clean(s.modelFile);if(!modelId||!modelFile||reloadingForModel)return;
       const next=identityOf(modelId,modelFile);
-      if(!activeSnapshotIdentity){activeSnapshotIdentity=next;return}
-      if(next===activeSnapshotIdentity)return;
-      activeSnapshotIdentity=next;
-      startLive2DSwap(next);
+      if(!activeModelIdentity){activeModelIdentity=next;candidateModelIdentity='';candidateModelHits=0;return}
+      if(next===activeModelIdentity){candidateModelIdentity='';candidateModelHits=0;return}
+      if(next!==candidateModelIdentity){candidateModelIdentity=next;candidateModelHits=1;return}
+      candidateModelHits+=1;
+      if(candidateModelHits<2)return;
+      activeModelIdentity=next;
+      reloadingForModel=true;
+      showSwapMask();
+      window.setTimeout(()=>window.location.reload(),180);
+    }
+    function requestSync(method){
+      const ws=relaySocket;if(!pairApproved||!ws||ws.readyState!==WebSocket.OPEN)return;
+      const id=`mobile-shell-sync-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+      pending.set(id,method);
+      try{ws.send(JSON.stringify({type:'rpc.request',id,method}))}catch{pending.delete(id)}
     }
     function incoming(message){
       if(!message||typeof message!=='object')return;
+      if(message.type==='pair.approved'){
+        pairApproved=true;
+        window.setTimeout(()=>{requestSync('companion.chat.history');requestSync('companion.snapshot')},80);
+      }
+      if(message.type==='relay.peer.left'&&message.role==='desktop')pairApproved=false;
       if(message.type==='companion.snapshot'||message.type==='companion.snapshot.updated')acceptSnapshot(message.payload);
       if(message.type==='chat.history'){acceptHistory(message.payload);return}
       if(message.type!=='rpc.response'||!message.id)return;
@@ -124,18 +94,19 @@
     const Native=window.WebSocket;
     function Wrapped(url,protocols){
       const ws=protocols===undefined?new Native(url):new Native(url,protocols);
+      if(/(?:\?|&)role=mobile(?:&|$)/.test(String(url)))relaySocket=ws;
       const send=ws.send;
       ws.send=function(data){try{const m=typeof data==='string'?JSON.parse(data):null;if(m?.type==='rpc.request'&&m.id&&m.method)pending.set(m.id,m.method)}catch{}return send.call(ws,data)};
       ws.addEventListener('message',e=>{if(typeof e.data!=='string')return;try{incoming(JSON.parse(e.data))}catch{}});
-      ws.addEventListener('close',()=>{if(live2dSwap)finishLive2DSwap()});
+      ws.addEventListener('close',()=>{if(relaySocket===ws){relaySocket=null;pairApproved=false}});
       return ws
     }
     Wrapped.prototype=Native.prototype;Object.defineProperties(Wrapped,{CONNECTING:{value:Native.CONNECTING},OPEN:{value:Native.OPEN},CLOSING:{value:Native.CLOSING},CLOSED:{value:Native.CLOSED}});window.WebSocket=Wrapped;
     document.addEventListener('input',e=>{if(e.target?.closest?.('.floating-composer'))paint()},true);
     setInterval(paint,400);
-    setInterval(()=>{if(!live2dSwap)hideSwapMask();else if(Date.now()-live2dSwap.startedAt>12500)finishLive2DSwap()},500);
     setTimeout(paint,0);
   })();
   </script>
+  <script type="module" crossorigin src="https://nekogpt-mobile-7gliy8oyu-inobushi3s-projects.vercel.app/assets/index-j8B69zxv.js"></script>
 </body>
 </html>
