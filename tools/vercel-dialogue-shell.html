@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-revision="live2d-swap-mask-v16-20260906">
+<html lang="pt-BR" data-revision="live2d-swap-mask-v17-20260907">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
@@ -35,7 +35,7 @@
     const pending=new Map();
     let history=[];
     let relaySocket=null,pairApproved=false;
-    let live2dModelIdentity='',live2dRefreshing=false,live2dLoadingTimer=0;
+    let live2dModelIdentity='',live2dCandidateIdentity='',live2dCandidateHits=0,live2dRefreshing=false,live2dLoadingTimer=0;
     const clean=v=>String(v||'').replace(/\s+/g,' ').trim();
     const clamp=v=>Math.max(0,Math.min(100,Math.round(v)));
     const attachmentChars=a=>{const text=clean(a?.text);if(text)return text.length+OVERHEAD;const mime=clean(a?.mimeType).toLowerCase();if(mime.startsWith('image/'))return IMG;if(mime==='application/pdf')return PDF;return FILE};
@@ -78,14 +78,14 @@
     }
     function watchLive2DLoading(){
       if(live2dLoadingTimer)clearInterval(live2dLoadingTimer);
-      const started=Date.now();let sawStatus=false,readyTicks=0;
+      const started=Date.now();let sawStageStatus=false,cleanTicks=0;
       live2dLoadingTimer=setInterval(()=>{
-        const hasStatus=!!document.querySelector('.companion-status');
+        const hasStageStatus=!!document.querySelector('.live2d-stage__status');
         const hasScreen=!!document.querySelector('.companion-screen');
         const elapsed=Date.now()-started;
-        if(hasStatus){sawStatus=true;readyTicks=0}
-        else if(hasScreen&&(sawStatus||elapsed>1800))readyTicks+=1;
-        if(readyTicks>=3||elapsed>12000)finishLive2DSwap();
+        if(hasStageStatus){sawStageStatus=true;cleanTicks=0}
+        else if(hasScreen&&(sawStageStatus||elapsed>1600))cleanTicks+=1;
+        if(cleanTicks>=3||elapsed>8000)finishLive2DSwap();
       },100);
     }
     function refreshLive2DOnly(attempt=0){
@@ -96,7 +96,20 @@
       dispatch(current=>(Number(current)||0)+1);
       watchLive2DLoading();
     }
-    function acceptSnapshot(value){const s=value&&typeof value==='object'?value:{};const modelId=clean(s.modelId),modelFile=clean(s.modelFile);if(!modelId||!modelFile)return;const next=`${modelId}\u0000${modelFile}`;if(!live2dModelIdentity){live2dModelIdentity=next;return}if(next===live2dModelIdentity)return;live2dModelIdentity=next;refreshLive2DOnly()}
+    function acceptSnapshot(value){
+      const s=value&&typeof value==='object'?value:{};
+      const modelId=clean(s.modelId),modelFile=clean(s.modelFile);
+      if(!modelId||!modelFile)return;
+      const next=`${modelId}\u0000${modelFile}`;
+      if(!live2dModelIdentity){live2dModelIdentity=next;live2dCandidateIdentity='';live2dCandidateHits=0;return}
+      if(next===live2dModelIdentity){live2dCandidateIdentity='';live2dCandidateHits=0;return}
+      if(next!==live2dCandidateIdentity){live2dCandidateIdentity=next;live2dCandidateHits=1;return}
+      live2dCandidateHits+=1;
+      if(live2dCandidateHits<2)return;
+      live2dModelIdentity=next;
+      live2dCandidateIdentity='';live2dCandidateHits=0;
+      refreshLive2DOnly();
+    }
     function incoming(message){
       if(!message||typeof message!=='object')return;
       if(message.type==='pair.approved')pairApproved=true;
