@@ -8,9 +8,24 @@ type RelaySignal = {
   payload?: unknown;
 };
 
+type ReactFiber = {
+  child?: ReactFiber | null;
+  sibling?: ReactFiber | null;
+  memoizedState?: ReactHook | null;
+};
+
+type ReactHook = {
+  memoizedState?: unknown;
+  next?: ReactHook | null;
+  queue?: {
+    dispatch?: (value: unknown) => void;
+  } | null;
+};
+
 let installed = false;
 let activeModelIdentity = '';
-let reloadScheduled = false;
+let refreshInFlight = false;
+let loadingWatcher = 0;
 
 function clean(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
@@ -26,6 +41,95 @@ function snapshotIdentity(value: unknown) {
   return `${modelId}\u0000${modelFile}`;
 }
 
+function collectHooks(fiber: ReactFiber) {
+  const hooks: ReactHook[] = [];
+  let hook = fiber.memoizedState || null;
+  while (hook && hooks.length < 48) {
+    hooks.push(hook);
+    hook = hook.next || null;
+  }
+  return hooks;
+}
+
+function findBundleRefreshDispatch() {
+  const root = document.getElementById('root') as (HTMLElement & Record<string, unknown>) | null;
+  if (!root) return null;
+
+  const containerKey = Object.keys(root).find((key) => key.startsWith('__reactContainer$'));
+  const rootFiber = containerKey ? root[containerKey] as ReactFiber | undefined : undefined;
+  if (!rootFiber) return null;
+
+  const stack: ReactFiber[] = [rootFiber];
+  while (stack.length) {
+    const fiber = stack.pop();
+    if (!fiber) continue;
+
+    const hooks = collectHooks(fiber);
+    if (hooks.length > 28) {
+      const phase = hooks[3]?.memoizedState;
+      const version = hooks[28]?.memoizedState;
+      const dispatch = hooks[28]?.queue?.dispatch;
+      if (
+        typeof phase === 'string'
+        && ['connected', 'connecting', 'disconnected', 'error'].includes(phase)
+        && typeof version === 'number'
+        && typeof dispatch === 'function'
+      ) {
+        return dispatch;
+      }
+    }
+
+    if (fiber.sibling) stack.push(fiber.sibling);
+    if (fiber.child) stack.push(fiber.child);
+  }
+
+  return null;
+}
+
+function forceLoadingLabel() {
+  const status = document.querySelector<HTMLElement>('.companion-status');
+  if (!status) return false;
+  const labels = status.querySelectorAll<HTMLElement>('span');
+  const label = labels.length > 1 ? labels[labels.length - 1] : null;
+  if (label) label.textContent = 'Carregando modelo...';
+  return true;
+}
+
+function watchLoadingState() {
+  if (loadingWatcher) window.clearInterval(loadingWatcher);
+  const startedAt = Date.now();
+  let sawStatus = false;
+
+  loadingWatcher = window.setInterval(() => {
+    const hasStatus = forceLoadingLabel();
+    if (hasStatus) sawStatus = true;
+
+    if ((sawStatus && !hasStatus) || Date.now() - startedAt > 20_000) {
+      window.clearInterval(loadingWatcher);
+      loadingWatcher = 0;
+      refreshInFlight = false;
+    }
+  }, 100);
+}
+
+function requestHotSwap(attempt = 0) {
+  if (refreshInFlight && attempt === 0) return;
+  if (attempt === 0) refreshInFlight = true;
+
+  const dispatch = findBundleRefreshDispatch();
+  if (!dispatch) {
+    if (attempt < 12) {
+      window.setTimeout(() => requestHotSwap(attempt + 1), 80);
+      return;
+    }
+    refreshInFlight = false;
+    return;
+  }
+
+  dispatch((current: unknown) => (Number(current) || 0) + 1);
+  watchLoadingState();
+}
+
 function acceptSnapshot(value: unknown) {
   const nextIdentity = snapshotIdentity(value);
   if (!nextIdentity) return;
@@ -35,14 +139,9 @@ function acceptSnapshot(value: unknown) {
     return;
   }
 
-  if (nextIdentity === activeModelIdentity || reloadScheduled) return;
-
+  if (nextIdentity === activeModelIdentity) return;
   activeModelIdentity = nextIdentity;
-  reloadScheduled = true;
-
-  // The Live2D bundle is requested during app startup. Reloading here makes the
-  // existing mobile connection request the newly selected desktop model bundle.
-  window.setTimeout(() => window.location.reload(), 90);
+  requestHotSwap();
 }
 
 function handleRpcResponse(event: Event) {
@@ -61,7 +160,11 @@ function handleConnectionPhase(event: Event) {
   const detail = (event as CustomEvent<{ phase?: string }>).detail;
   if (detail?.phase !== 'disconnected') return;
   activeModelIdentity = '';
-  reloadScheduled = false;
+  refreshInFlight = false;
+  if (loadingWatcher) {
+    window.clearInterval(loadingWatcher);
+    loadingWatcher = 0;
+  }
 }
 
 export function installLive2DModelSync() {
