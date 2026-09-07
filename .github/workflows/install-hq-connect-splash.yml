@@ -1,0 +1,63 @@
+name: Install HQ Connect splash
+
+on:
+  push:
+    paths:
+      - '.github/workflows/install-hq-connect-splash.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install HQ asset and patch shell
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public
+          cat .splash-hq/part0 .splash-hq/part1 .splash-hq/part2 .splash-hq/part3 .splash-hq/part4 .splash-hq/part5 .splash-hq/part6 .splash-hq/part7 .splash-hq/part8 .splash-hq/part9 | base64 -d > public/connect-splash-hq-v25.webp
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('tools/vercel-dialogue-shell.html')
+          s = p.read_text(encoding='utf-8')
+          s = s.replace('connect-splash-v24-20260907', 'connect-splash-hq-v25-20260907')
+
+          css = '''#nekogpt-connect-splash{position:fixed;inset:0;z-index:2147483646;display:flex;align-items:center;justify-content:center;background:#000;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;outline:none;overflow:hidden}\n    #nekogpt-connect-splash:focus{outline:none}\n    #nekogpt-connect-splash img{display:block;width:min(86vw,360px);height:auto;max-height:72svh;object-fit:contain;user-select:none;-webkit-user-drag:none;pointer-events:none;transform:translateY(-5svh)}'''
+          s, css_count = re.subn(
+              r'#nekogpt-connect-splash\{.*?#nekogpt-connect-splash:focus\{outline:none\}',
+              css,
+              s,
+              count=1,
+              flags=re.S,
+          )
+          if css_count != 1:
+              raise SystemExit(f'expected 1 splash CSS replacement, got {css_count}')
+
+          old = '<div id="nekogpt-connect-splash" role="button" tabindex="0" aria-label="Entrar no NekoGPT Connect"></div>'
+          new = '<div id="nekogpt-connect-splash" role="button" tabindex="0" aria-label="Entrar no NekoGPT Connect"><img src="https://raw.githubusercontent.com/inobushi3/Nekogpt-mobile/main/public/connect-splash-hq-v25.webp?v=25" alt="NekoGPT Connect" draggable="false"></div>'
+          if old not in s:
+              raise SystemExit('old splash element was not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+
+          test -s public/connect-splash-hq-v25.webp
+          test "$(wc -c < public/connect-splash-hq-v25.webp)" -eq 51230
+          rm -rf .splash-hq
+          rm -f .github/workflows/install-hq-connect-splash.yml
+
+      - name: Commit HQ splash
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "Ruan Lucas"
+          git config user.email "ruanlucasns97@gmail.com"
+          git add -A
+          git commit -m "fix(mobile): restore high-quality centered Connect splash"
+          git push
