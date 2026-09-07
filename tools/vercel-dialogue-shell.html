@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-revision="live2d-hot-swap-v18-20260907">
+<html lang="pt-BR" data-revision="live2d-native-swap-v19-20260907">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
@@ -35,8 +35,7 @@
     const pending=new Map();
     let history=[];
     let relaySocket=null,pairApproved=false;
-    let loadedLive2DIdentity='',latestLive2DIdentity='',candidateLive2DIdentity='',candidateLive2DHits=0;
-    let live2dSwap=null,live2dSwapMonitor=0,live2dRetryAfter=0;
+    let candidateLive2DIdentity='',candidateLive2DHits=0,live2dSwap=null,live2dSwapMonitor=0,live2dRetryAfter=0;
     const clean=v=>String(v||'').replace(/\s+/g,' ').trim();
     const clamp=v=>Math.max(0,Math.min(100,Math.round(v)));
     const normalizePath=v=>clean(v).replace(/\\/g,'/').replace(/^\.\//,'').replace(/^\/+/, '').toLowerCase();
@@ -66,8 +65,8 @@
         const fiber=stack.pop();if(!fiber)continue;
         const hooks=collectHooks(fiber);
         if(hooks.length>28){
-          const phase=hooks[3]?.memoizedState,bundle=hooks[5]?.memoizedState,setBundle=hooks[5]?.queue?.dispatch,bundleProgress=hooks[6]?.memoizedState;
-          if(typeof phase==='string'&&['connected','connecting','disconnected','error'].includes(phase)&&typeof setBundle==='function')return{phase,bundle,setBundle,bundleProgress:typeof bundleProgress==='string'?bundleProgress:''};
+          const phase=hooks[3]?.memoizedState,bundle=hooks[5]?.memoizedState,bundleProgress=hooks[6]?.memoizedState,reloadBundle=hooks[28]?.queue?.dispatch;
+          if(typeof phase==='string'&&['connected','connecting','disconnected','error'].includes(phase)&&typeof reloadBundle==='function')return{phase,bundle,bundleProgress:typeof bundleProgress==='string'?bundleProgress:'',reloadBundle};
         }
         if(fiber.sibling)stack.push(fiber.sibling);if(fiber.child)stack.push(fiber.child);
       }
@@ -78,112 +77,60 @@
     function clearSwapMonitor(){if(live2dSwapMonitor){clearInterval(live2dSwapMonitor);live2dSwapMonitor=0}}
     function finishLive2DSwap(success){
       clearSwapMonitor();
-      const finished=live2dSwap;
-      if(success&&finished)loadedLive2DIdentity=finished.targetIdentity;
       if(!success)live2dRetryAfter=Date.now()+2500;
-      live2dSwap=null;
-      hideSwapMask();
-      candidateLive2DIdentity='';candidateLive2DHits=0;
+      live2dSwap=null;candidateLive2DIdentity='';candidateLive2DHits=0;hideSwapMask();
     }
-    function decodeBundleChunks(chunks,byteLength){
-      const joined=chunks.join(''),binary=atob(joined),bytes=new Uint8Array(binary.length);
-      for(let i=0;i<binary.length;i+=1)bytes[i]=binary.charCodeAt(i);
-      if(byteLength&&bytes.byteLength!==byteLength)throw new Error('Pacote Live2D incompleto');
-      return bytes;
+    function triggerNativeBundleReload(){
+      const swap=live2dSwap;if(!swap||swap.attempts>=4)return false;
+      const controller=findAppController();if(!controller||controller.phase!=='connected')return false;
+      swap.attempts+=1;swap.lastTriggerAt=Date.now();swap.stableTicks=0;
+      controller.reloadBundle(value=>(Number(value)||0)+1);
+      return true;
     }
-    function rawRelaySend(message){
-      const ws=relaySocket;if(!ws||ws.readyState!==Native.OPEN)return false;
-      try{Native.prototype.send.call(ws,JSON.stringify(message));return true}catch{return false}
-    }
-    function requestLive2DBundleForSwap(){
-      const swap=live2dSwap;if(!swap)return;
-      const ws=relaySocket;
-      if(!pairApproved||!ws||ws.readyState!==Native.OPEN){finishLive2DSwap(false);return}
-      swap.requestAttempt=(swap.requestAttempt||0)+1;
-      if(swap.requestAttempt>5){finishLive2DSwap(false);return}
-      const rpcId=`mobile-live2d-bundle-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-      swap.rpcId=rpcId;swap.transferId='';swap.metadata=null;swap.chunks=[];swap.received=0;
-      if(!rawRelaySend({type:'rpc.request',id:rpcId,method:'live2d.bundle'})){finishLive2DSwap(false);return}
-      const generation=swap.generation;
-      setTimeout(()=>{if(live2dSwap?.generation===generation&&live2dSwap.rpcId===rpcId&&!live2dSwap.metadata)requestLive2DBundleForSwap()},2200);
-    }
-    function injectLive2DBundle(bundle){
-      const swap=live2dSwap;if(!swap)return;
-      let tries=0;
-      const attempt=()=>{
-        if(!live2dSwap||live2dSwap.generation!==swap.generation)return;
-        const controller=findAppController();
-        if(!controller){if(++tries<30){setTimeout(attempt,100);return}finishLive2DSwap(false);return}
-        swap.injectedAt=Date.now();swap.sawStageStatus=false;swap.cleanTicks=0;
-        controller.setBundle(bundle);
-        watchInjectedLive2D();
-      };
-      attempt();
-    }
-    function watchInjectedLive2D(){
+    function watchNativeLive2DSwap(){
       clearSwapMonitor();
-      const swap=live2dSwap;if(!swap)return;
-      const generation=swap.generation;
       live2dSwapMonitor=setInterval(()=>{
-        if(!live2dSwap||live2dSwap.generation!==generation){clearSwapMonitor();return}
-        const controller=findAppController(),status=document.querySelector('.live2d-stage__status');
-        const elapsed=Date.now()-(swap.injectedAt||swap.startedAt);
-        const currentFile=controller?.bundle?.modelFile||'';
-        const targetFile=swap.targetModelFile;
-        const correctBundle=!targetFile||!currentFile||sameModelFile(currentFile,targetFile);
-        if(status){swap.sawStageStatus=true;swap.cleanTicks=0}
-        else if(correctBundle&&controller?.bundle&&(swap.sawStageStatus||elapsed>900))swap.cleanTicks=(swap.cleanTicks||0)+1;
-        if(swap.cleanTicks>=3){finishLive2DSwap(true);return}
-        if(elapsed>18000){finishLive2DSwap(false);return}
-      },120);
+        const swap=live2dSwap;if(!swap){clearSwapMonitor();hideSwapMask();return}
+        const now=Date.now(),elapsed=now-swap.startedAt;
+        if(elapsed>26000){finishLive2DSwap(false);return}
+        const controller=findAppController();
+        if(!controller){if(!swap.lastTriggerAt||now-swap.lastTriggerAt>1200)triggerNativeBundleReload();return}
+        const currentFile=clean(controller.bundle?.modelFile),correct=!!currentFile&&sameModelFile(currentFile,swap.targetModelFile);
+        const stageBusy=!!document.querySelector('.live2d-stage__status');
+        if(correct){
+          if(stageBusy){swap.sawStageBusy=true;swap.stableTicks=0;return}
+          if(swap.sawStageBusy||elapsed>1100)swap.stableTicks+=1;
+          if(swap.stableTicks>=4){finishLive2DSwap(true);return}
+        }else{
+          swap.stableTicks=0;
+        }
+        if((!swap.lastTriggerAt||now-swap.lastTriggerAt>5200)&&swap.attempts<4){triggerNativeBundleReload();return}
+        if(swap.attempts>=4&&now-swap.lastTriggerAt>7000){finishLive2DSwap(false)}
+      },150);
     }
     function startLive2DSwap(targetIdentity){
-      if(!targetIdentity||targetIdentity===loadedLive2DIdentity||Date.now()<live2dRetryAfter)return;
-      if(live2dSwap)return;
-      live2dSwap={generation:Date.now()+Math.random(),targetIdentity,targetModelFile:identityModelFile(targetIdentity),startedAt:Date.now(),requestAttempt:0,rpcId:'',transferId:'',metadata:null,chunks:[],received:0};
-      showSwapMask();
-      requestLive2DBundleForSwap();
+      if(!targetIdentity||live2dSwap||Date.now()<live2dRetryAfter)return;
+      const targetModelFile=identityModelFile(targetIdentity),controller=findAppController(),currentFile=clean(controller?.bundle?.modelFile);
+      if(currentFile&&sameModelFile(currentFile,targetModelFile)){candidateLive2DIdentity='';candidateLive2DHits=0;return}
+      live2dSwap={targetIdentity,targetModelFile,startedAt:Date.now(),lastTriggerAt:0,attempts:0,stableTicks:0,sawStageBusy:false};
+      showSwapMask();triggerNativeBundleReload();watchNativeLive2DSwap();
     }
     function acceptSnapshot(value){
-      const s=value&&typeof value==='object'?value:{};
-      const modelId=clean(s.modelId),modelFile=clean(s.modelFile);if(!modelId||!modelFile)return;
-      const next=identityOf(modelId,modelFile);latestLive2DIdentity=next;
-      if(!loadedLive2DIdentity){loadedLive2DIdentity=next;candidateLive2DIdentity='';candidateLive2DHits=0;return}
-      if(next===loadedLive2DIdentity){candidateLive2DIdentity='';candidateLive2DHits=0;return}
-      if(live2dSwap)return;
+      const s=value&&typeof value==='object'?value:{},modelId=clean(s.modelId),modelFile=clean(s.modelFile);if(!modelId||!modelFile)return;
+      const next=identityOf(modelId,modelFile),controller=findAppController(),currentFile=clean(controller?.bundle?.modelFile);
+      if(currentFile&&sameModelFile(currentFile,modelFile)){
+        candidateLive2DIdentity='';candidateLive2DHits=0;
+        if(live2dSwap&&sameModelFile(live2dSwap.targetModelFile,modelFile)&&!document.querySelector('.live2d-stage__status'))live2dSwap.stableTicks=Math.max(live2dSwap.stableTicks,1);
+        return;
+      }
+      if(!currentFile||live2dSwap)return;
       if(next!==candidateLive2DIdentity){candidateLive2DIdentity=next;candidateLive2DHits=1;return}
-      candidateLive2DHits+=1;
-      if(candidateLive2DHits>=2)startLive2DSwap(next);
-    }
-    function handleSwapRpcResponse(message){
-      const swap=live2dSwap;if(!swap||message.id!==swap.rpcId)return false;
-      if(!message.ok||!message.result||typeof message.result!=='object'){setTimeout(requestLive2DBundleForSwap,450);return true}
-      const metadata=message.result,targetFile=swap.targetModelFile,receivedFile=metadata.modelFile||'';
-      if(targetFile&&receivedFile&&!sameModelFile(receivedFile,targetFile)){setTimeout(requestLive2DBundleForSwap,550);return true}
-      const totalChunks=Number(metadata.totalChunks),transferId=clean(metadata.transferId);
-      if(!transferId||!Number.isInteger(totalChunks)||totalChunks<1){setTimeout(requestLive2DBundleForSwap,450);return true}
-      swap.metadata=metadata;swap.transferId=transferId;swap.chunks=new Array(totalChunks);swap.received=0;
-      if(!rawRelaySend({type:'live2d.bundle.ready',transferId})){finishLive2DSwap(false)}
-      return true;
-    }
-    function handleSwapChunk(message){
-      const swap=live2dSwap;if(!swap||message.type!=='live2d.bundle.chunk'||clean(message.transferId)!==swap.transferId)return false;
-      const index=Number(message.index),total=swap.chunks.length;
-      if(!Number.isInteger(index)||index<0||index>=total)return true;
-      if(!swap.chunks[index]){swap.chunks[index]=String(message.data||'');swap.received+=1}
-      if(swap.received!==total)return true;
-      try{
-        const bytes=decodeBundleChunks(swap.chunks,Number(swap.metadata?.byteLength)||0);
-        injectLive2DBundle({...swap.metadata,bytes});
-      }catch{setTimeout(requestLive2DBundleForSwap,450)}
-      return true;
+      candidateLive2DHits+=1;if(candidateLive2DHits>=2)startLive2DSwap(next);
     }
     function incoming(message){
       if(!message||typeof message!=='object')return;
       if(message.type==='pair.approved')pairApproved=true;
       if(message.type==='relay.peer.left'&&message.role==='desktop'){pairApproved=false;if(live2dSwap)finishLive2DSwap(false)}
-      if(handleSwapChunk(message))return;
-      if(message.type==='rpc.response'&&handleSwapRpcResponse(message))return;
       if(message.type==='companion.snapshot'||message.type==='companion.snapshot.updated')acceptSnapshot(message.payload);
       if(message.type==='chat.history'){acceptHistory(message.payload);return}
       if(message.type!=='rpc.response'||!message.id)return;
@@ -211,7 +158,7 @@
     document.addEventListener('input',e=>{if(e.target?.closest?.('.floating-composer'))paint()},true);
     setInterval(paint,400);
     setInterval(pollLive2DSnapshot,1800);
-    setInterval(()=>{if(!live2dSwap)hideSwapMask()},500);
+    setInterval(()=>{if(!live2dSwap)hideSwapMask();else if(Date.now()-live2dSwap.startedAt>28000)finishLive2DSwap(false)},500);
     setTimeout(paint,0);setTimeout(pollLive2DSnapshot,2200);
   })();
   </script>
