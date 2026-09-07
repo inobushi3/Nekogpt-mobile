@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-revision="live2d-sync-v13-20260906">
+<html lang="pt-BR" data-revision="live2d-hot-swap-v14-20260906">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
@@ -33,7 +33,7 @@
     const pending=new Map();
     let history=[];
     let relaySocket=null,pairApproved=false;
-    let live2dModelIdentity='',live2dRefreshing=false,live2dFallbackTimer=0;
+    let live2dModelIdentity='',live2dRefreshing=false,live2dLoadingTimer=0;
     const clean=v=>String(v||'').replace(/\s+/g,' ').trim();
     const clamp=v=>Math.max(0,Math.min(100,Math.round(v)));
     const attachmentChars=a=>{const text=clean(a?.text);if(text)return text.length+OVERHEAD;const mime=clean(a?.mimeType).toLowerCase();if(mime.startsWith('image/'))return IMG;if(mime==='application/pdf')return PDF;return FILE};
@@ -50,25 +50,43 @@
     function percent(){const chars=history.reduce((sum,m)=>sum+m.content.length+OVERHEAD+m.attachments.reduce((n,a)=>n+attachmentChars(a),0),0)+draftChars();return clamp(chars/CONTEXT_LIMIT_CHARS*100)}
     function paint(){const g=ensure();if(!g)return;const p=percent(),fill=g.querySelector('.relationship-gauge__fill'),heart=g.querySelector('.relationship-gauge__heart');if(fill)fill.style.width=`${1.88*p}px`;if(heart)heart.src=p>=100?`${HUD}/hp-icon-active.png`:`${HUD}/hp-icon-base.png`;g.dataset.percent=String(p);g.title=`Contexto do chat ${p}%`;g.setAttribute('aria-label',`Relacionamento · contexto do chat ${p}%`)}
     function acceptHistory(value){history=normalizeHistory(value);paint()}
-    function refreshLive2DOnly(){
-      if(live2dRefreshing)return;
-      live2dRefreshing=true;
-      const ws=relaySocket;
-      if(ws&&ws.readyState===WebSocket.OPEN){
-        try{ws.close(4002,'live2d model changed')}catch{}
-        live2dFallbackTimer=window.setTimeout(()=>{if(live2dRefreshing)location.reload()},4500);
-        return;
+    function collectHooks(fiber){const hooks=[];let hook=fiber?.memoizedState||null;while(hook&&hooks.length<48){hooks.push(hook);hook=hook.next||null}return hooks}
+    function findBundleRefreshDispatch(){
+      const root=document.getElementById('root');if(!root)return null;
+      const key=Object.keys(root).find(k=>k.startsWith('__reactContainer$'));const rootFiber=key?root[key]:null;if(!rootFiber)return null;
+      const stack=[rootFiber];
+      while(stack.length){
+        const fiber=stack.pop();if(!fiber)continue;
+        const hooks=collectHooks(fiber);
+        if(hooks.length>28){
+          const phase=hooks[3]?.memoizedState,version=hooks[28]?.memoizedState,dispatch=hooks[28]?.queue?.dispatch;
+          if(typeof phase==='string'&&['connected','connecting','disconnected','error'].includes(phase)&&typeof version==='number'&&typeof dispatch==='function')return dispatch;
+        }
+        if(fiber.sibling)stack.push(fiber.sibling);if(fiber.child)stack.push(fiber.child);
       }
-      location.reload();
+      return null;
+    }
+    function forceLoadingLabel(){const status=document.querySelector('.companion-status');if(!status)return false;const spans=status.querySelectorAll('span'),label=spans.length>1?spans[spans.length-1]:null;if(label)label.textContent='Carregando modelo...';return true}
+    function watchLive2DLoading(){
+      if(live2dLoadingTimer)clearInterval(live2dLoadingTimer);
+      const started=Date.now();let sawStatus=false;
+      live2dLoadingTimer=setInterval(()=>{
+        const hasStatus=forceLoadingLabel();if(hasStatus)sawStatus=true;
+        if((sawStatus&&!hasStatus)||Date.now()-started>20000){clearInterval(live2dLoadingTimer);live2dLoadingTimer=0;live2dRefreshing=false}
+      },100);
+    }
+    function refreshLive2DOnly(attempt=0){
+      if(live2dRefreshing&&attempt===0)return;
+      if(attempt===0)live2dRefreshing=true;
+      const dispatch=findBundleRefreshDispatch();
+      if(!dispatch){if(attempt<12){setTimeout(()=>refreshLive2DOnly(attempt+1),80);return}live2dRefreshing=false;return}
+      dispatch(current=>(Number(current)||0)+1);
+      watchLive2DLoading();
     }
     function acceptSnapshot(value){const s=value&&typeof value==='object'?value:{};const modelId=clean(s.modelId),modelFile=clean(s.modelFile);if(!modelId||!modelFile)return;const next=`${modelId}\u0000${modelFile}`;if(!live2dModelIdentity){live2dModelIdentity=next;return}if(next===live2dModelIdentity)return;live2dModelIdentity=next;refreshLive2DOnly()}
     function incoming(message){
       if(!message||typeof message!=='object')return;
-      if(message.type==='pair.approved'){
-        pairApproved=true;
-        if(live2dFallbackTimer){window.clearTimeout(live2dFallbackTimer);live2dFallbackTimer=0}
-        live2dRefreshing=false;
-      }
+      if(message.type==='pair.approved')pairApproved=true;
       if(message.type==='relay.peer.left'&&message.role==='desktop')pairApproved=false;
       if(message.type==='companion.snapshot'||message.type==='companion.snapshot.updated')acceptSnapshot(message.payload);
       if(message.type==='chat.history'){acceptHistory(message.payload);return}
