@@ -86,12 +86,74 @@ function findBundleRefreshDispatch() {
   return null;
 }
 
+function ensureSwitchOverlay() {
+  let overlay = document.querySelector<HTMLElement>('.live2d-switch-overlay');
+  if (overlay) return overlay;
+
+  overlay = document.createElement('div');
+  overlay.className = 'live2d-switch-overlay';
+  overlay.innerHTML = `
+    <span class="live2d-switch-overlay__spinner" aria-hidden="true"></span>
+    <span class="live2d-switch-overlay__label">Trocando de modelo</span>
+  `;
+  Object.assign(overlay.style, {
+    position: 'fixed',
+    inset: '0',
+    zIndex: '2147483647',
+    display: 'none',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'column',
+    gap: '14px',
+    background: 'rgba(10, 9, 15, 0.82)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+    color: '#fff6e8',
+    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    fontSize: '16px',
+    fontWeight: '600',
+    letterSpacing: '0.01em',
+    pointerEvents: 'all',
+  });
+
+  const spinner = overlay.querySelector<HTMLElement>('.live2d-switch-overlay__spinner');
+  if (spinner) {
+    Object.assign(spinner.style, {
+      width: '28px',
+      height: '28px',
+      borderRadius: '999px',
+      border: '3px solid rgba(255, 246, 232, 0.24)',
+      borderTopColor: '#fff6e8',
+      animation: 'live2dSwitchSpin 0.8s linear infinite',
+    });
+  }
+
+  if (!document.getElementById('live2d-switch-overlay-style')) {
+    const style = document.createElement('style');
+    style.id = 'live2d-switch-overlay-style';
+    style.textContent = '@keyframes live2dSwitchSpin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(style);
+  }
+
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
+function showSwitchOverlay() {
+  ensureSwitchOverlay().style.display = 'flex';
+}
+
+function hideSwitchOverlay() {
+  const overlay = document.querySelector<HTMLElement>('.live2d-switch-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
 function forceLoadingLabel() {
   const status = document.querySelector<HTMLElement>('.companion-status');
   if (!status) return false;
   const labels = status.querySelectorAll<HTMLElement>('span');
   const label = labels.length > 1 ? labels[labels.length - 1] : null;
-  if (label) label.textContent = 'Carregando modelo...';
+  if (label) label.textContent = 'Trocando de modelo';
   return true;
 }
 
@@ -102,19 +164,26 @@ function watchLoadingState() {
 
   loadingWatcher = window.setInterval(() => {
     const hasStatus = forceLoadingLabel();
+    const hasCompanionScreen = Boolean(document.querySelector('.companion-screen'));
+    const elapsed = Date.now() - startedAt;
     if (hasStatus) sawStatus = true;
 
-    if ((sawStatus && !hasStatus) || Date.now() - startedAt > 20_000) {
+    const finished = hasCompanionScreen && !hasStatus && (sawStatus || elapsed > 1800);
+    if (finished || elapsed > 25_000) {
       window.clearInterval(loadingWatcher);
       loadingWatcher = 0;
       refreshInFlight = false;
+      hideSwitchOverlay();
     }
   }, 100);
 }
 
 function requestHotSwap(attempt = 0) {
   if (refreshInFlight && attempt === 0) return;
-  if (attempt === 0) refreshInFlight = true;
+  if (attempt === 0) {
+    refreshInFlight = true;
+    showSwitchOverlay();
+  }
 
   const dispatch = findBundleRefreshDispatch();
   if (!dispatch) {
@@ -123,6 +192,7 @@ function requestHotSwap(attempt = 0) {
       return;
     }
     refreshInFlight = false;
+    hideSwitchOverlay();
     return;
   }
 
@@ -158,13 +228,17 @@ function handleRelayMessage(event: Event) {
 
 function handleConnectionPhase(event: Event) {
   const detail = (event as CustomEvent<{ phase?: string }>).detail;
-  if (detail?.phase !== 'disconnected') return;
-  activeModelIdentity = '';
-  refreshInFlight = false;
-  if (loadingWatcher) {
-    window.clearInterval(loadingWatcher);
-    loadingWatcher = 0;
+  if (detail?.phase === 'connected' && refreshInFlight) {
+    showSwitchOverlay();
+    return;
   }
+  if (detail?.phase !== 'disconnected') return;
+  if (refreshInFlight) {
+    showSwitchOverlay();
+    return;
+  }
+  activeModelIdentity = '';
+  hideSwitchOverlay();
 }
 
 export function installLive2DModelSync() {
