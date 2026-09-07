@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-revision="live2d-native-swap-v19-20260907">
+<html lang="pt-BR" data-revision="live2d-native-swap-v20-20260907">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
@@ -34,14 +34,10 @@
     const CONTEXT_LIMIT_CHARS=8000*4,OVERHEAD=16,IMG=360,PDF=1200,FILE=520;
     const pending=new Map();
     let history=[];
-    let relaySocket=null,pairApproved=false;
-    let candidateLive2DIdentity='',candidateLive2DHits=0,live2dSwap=null,live2dSwapMonitor=0,live2dRetryAfter=0;
+    let activeSnapshotIdentity='',live2dSwap=null,live2dSwapMonitor=0;
     const clean=v=>String(v||'').replace(/\s+/g,' ').trim();
     const clamp=v=>Math.max(0,Math.min(100,Math.round(v)));
-    const normalizePath=v=>clean(v).replace(/\\/g,'/').replace(/^\.\//,'').replace(/^\/+/, '').toLowerCase();
     const identityOf=(modelId,modelFile)=>`${clean(modelId)}\u0000${clean(modelFile)}`;
-    const identityModelFile=identity=>identity.includes('\u0000')?identity.slice(identity.indexOf('\u0000')+1):'';
-    const sameModelFile=(a,b)=>{const x=normalizePath(a),y=normalizePath(b);return !!x&&!!y&&(x===y||x.endsWith('/'+y)||y.endsWith('/'+x))};
     const attachmentChars=a=>{const text=clean(a?.text);if(text)return text.length+OVERHEAD;const mime=clean(a?.mimeType).toLowerCase();if(mime.startsWith('image/'))return IMG;if(mime==='application/pdf')return PDF;return FILE};
     function ensure(){
       const s=document.querySelector('.companion-screen');if(!s)return null;
@@ -75,62 +71,48 @@
     function showSwapMask(){document.querySelector('.live2d-switch-mask')?.classList.add('is-active')}
     function hideSwapMask(){document.querySelector('.live2d-switch-mask')?.classList.remove('is-active')}
     function clearSwapMonitor(){if(live2dSwapMonitor){clearInterval(live2dSwapMonitor);live2dSwapMonitor=0}}
-    function finishLive2DSwap(success){
-      clearSwapMonitor();
-      if(!success)live2dRetryAfter=Date.now()+2500;
-      live2dSwap=null;candidateLive2DIdentity='';candidateLive2DHits=0;hideSwapMask();
-    }
-    function triggerNativeBundleReload(){
-      const swap=live2dSwap;if(!swap||swap.attempts>=4)return false;
-      const controller=findAppController();if(!controller||controller.phase!=='connected')return false;
-      swap.attempts+=1;swap.lastTriggerAt=Date.now();swap.stableTicks=0;
+    function finishLive2DSwap(){clearSwapMonitor();live2dSwap=null;hideSwapMask()}
+    function triggerNativeBundleReload(attempt=0){
+      const swap=live2dSwap;if(!swap)return;
+      const controller=findAppController();
+      if(!controller||controller.phase!=='connected'){
+        if(attempt<20)setTimeout(()=>triggerNativeBundleReload(attempt+1),100);else finishLive2DSwap();
+        return;
+      }
+      swap.triggered=true;
       controller.reloadBundle(value=>(Number(value)||0)+1);
-      return true;
     }
     function watchNativeLive2DSwap(){
       clearSwapMonitor();
       live2dSwapMonitor=setInterval(()=>{
         const swap=live2dSwap;if(!swap){clearSwapMonitor();hideSwapMask();return}
-        const now=Date.now(),elapsed=now-swap.startedAt;
-        if(elapsed>26000){finishLive2DSwap(false);return}
+        const elapsed=Date.now()-swap.startedAt;
+        if(elapsed>12000){finishLive2DSwap();return}
         const controller=findAppController();
-        if(!controller){if(!swap.lastTriggerAt||now-swap.lastTriggerAt>1200)triggerNativeBundleReload();return}
-        const currentFile=clean(controller.bundle?.modelFile),correct=!!currentFile&&sameModelFile(currentFile,swap.targetModelFile);
-        const stageBusy=!!document.querySelector('.live2d-stage__status');
-        if(correct){
-          if(stageBusy){swap.sawStageBusy=true;swap.stableTicks=0;return}
-          if(swap.sawStageBusy||elapsed>1100)swap.stableTicks+=1;
-          if(swap.stableTicks>=4){finishLive2DSwap(true);return}
-        }else{
-          swap.stableTicks=0;
-        }
-        if((!swap.lastTriggerAt||now-swap.lastTriggerAt>5200)&&swap.attempts<4){triggerNativeBundleReload();return}
-        if(swap.attempts>=4&&now-swap.lastTriggerAt>7000){finishLive2DSwap(false)}
+        if(!controller)return;
+        const busy=Boolean(controller.bundleProgress)||Boolean(document.querySelector('.live2d-stage__status'));
+        if(busy){swap.sawBusy=true;swap.readyTicks=0;return}
+        if(swap.sawBusy||elapsed>1800)swap.readyTicks+=1;
+        if(swap.readyTicks>=4)finishLive2DSwap();
       },150);
     }
     function startLive2DSwap(targetIdentity){
-      if(!targetIdentity||live2dSwap||Date.now()<live2dRetryAfter)return;
-      const targetModelFile=identityModelFile(targetIdentity),controller=findAppController(),currentFile=clean(controller?.bundle?.modelFile);
-      if(currentFile&&sameModelFile(currentFile,targetModelFile)){candidateLive2DIdentity='';candidateLive2DHits=0;return}
-      live2dSwap={targetIdentity,targetModelFile,startedAt:Date.now(),lastTriggerAt:0,attempts:0,stableTicks:0,sawStageBusy:false};
-      showSwapMask();triggerNativeBundleReload();watchNativeLive2DSwap();
+      if(!targetIdentity||live2dSwap)return;
+      live2dSwap={targetIdentity,startedAt:Date.now(),triggered:false,sawBusy:false,readyTicks:0};
+      showSwapMask();
+      triggerNativeBundleReload();
+      watchNativeLive2DSwap();
     }
     function acceptSnapshot(value){
       const s=value&&typeof value==='object'?value:{},modelId=clean(s.modelId),modelFile=clean(s.modelFile);if(!modelId||!modelFile)return;
-      const next=identityOf(modelId,modelFile),controller=findAppController(),currentFile=clean(controller?.bundle?.modelFile);
-      if(currentFile&&sameModelFile(currentFile,modelFile)){
-        candidateLive2DIdentity='';candidateLive2DHits=0;
-        if(live2dSwap&&sameModelFile(live2dSwap.targetModelFile,modelFile)&&!document.querySelector('.live2d-stage__status'))live2dSwap.stableTicks=Math.max(live2dSwap.stableTicks,1);
-        return;
-      }
-      if(!currentFile||live2dSwap)return;
-      if(next!==candidateLive2DIdentity){candidateLive2DIdentity=next;candidateLive2DHits=1;return}
-      candidateLive2DHits+=1;if(candidateLive2DHits>=2)startLive2DSwap(next);
+      const next=identityOf(modelId,modelFile);
+      if(!activeSnapshotIdentity){activeSnapshotIdentity=next;return}
+      if(next===activeSnapshotIdentity)return;
+      activeSnapshotIdentity=next;
+      startLive2DSwap(next);
     }
     function incoming(message){
       if(!message||typeof message!=='object')return;
-      if(message.type==='pair.approved')pairApproved=true;
-      if(message.type==='relay.peer.left'&&message.role==='desktop'){pairApproved=false;if(live2dSwap)finishLive2DSwap(false)}
       if(message.type==='companion.snapshot'||message.type==='companion.snapshot.updated')acceptSnapshot(message.payload);
       if(message.type==='chat.history'){acceptHistory(message.payload);return}
       if(message.type!=='rpc.response'||!message.id)return;
@@ -142,24 +124,17 @@
     const Native=window.WebSocket;
     function Wrapped(url,protocols){
       const ws=protocols===undefined?new Native(url):new Native(url,protocols);
-      const isMobileRelay=/(?:\?|&)role=mobile(?:&|$)/.test(String(url));if(isMobileRelay)relaySocket=ws;
       const send=ws.send;
       ws.send=function(data){try{const m=typeof data==='string'?JSON.parse(data):null;if(m?.type==='rpc.request'&&m.id&&m.method)pending.set(m.id,m.method)}catch{}return send.call(ws,data)};
       ws.addEventListener('message',e=>{if(typeof e.data!=='string')return;try{incoming(JSON.parse(e.data))}catch{}});
-      ws.addEventListener('close',()=>{if(relaySocket===ws){relaySocket=null;pairApproved=false;if(live2dSwap)finishLive2DSwap(false)}});
+      ws.addEventListener('close',()=>{if(live2dSwap)finishLive2DSwap()});
       return ws
     }
     Wrapped.prototype=Native.prototype;Object.defineProperties(Wrapped,{CONNECTING:{value:Native.CONNECTING},OPEN:{value:Native.OPEN},CLOSING:{value:Native.CLOSING},CLOSED:{value:Native.CLOSED}});window.WebSocket=Wrapped;
-    function pollLive2DSnapshot(){
-      const ws=relaySocket;if(!pairApproved||!ws||ws.readyState!==Native.OPEN)return;
-      const id=`mobile-live2d-sync-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-      try{ws.send(JSON.stringify({type:'rpc.request',id,method:'companion.snapshot'}))}catch{}
-    }
     document.addEventListener('input',e=>{if(e.target?.closest?.('.floating-composer'))paint()},true);
     setInterval(paint,400);
-    setInterval(pollLive2DSnapshot,1800);
-    setInterval(()=>{if(!live2dSwap)hideSwapMask();else if(Date.now()-live2dSwap.startedAt>28000)finishLive2DSwap(false)},500);
-    setTimeout(paint,0);setTimeout(pollLive2DSnapshot,2200);
+    setInterval(()=>{if(!live2dSwap)hideSwapMask();else if(Date.now()-live2dSwap.startedAt>12500)finishLive2DSwap()},500);
+    setTimeout(paint,0);
   })();
   </script>
 </body>
