@@ -4,6 +4,7 @@ import App from './App';
 import { installDialogueEffects } from './dialogue-effects';
 import { installDialogueWindow } from './dialogue-window';
 import { installLive2DDragSmoothing } from './live2d-drag-smoothing';
+import { installLive2DModelSync } from './live2d-model-sync';
 import { installMobileHistoryPull } from './mobile-history-pull';
 import { installMobileHud } from './mobile-hud';
 import './styles.css';
@@ -26,13 +27,14 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 
 installDialogueWindow();
 installLive2DDragSmoothing();
+installLive2DModelSync();
 installMobileHud();
 installMobileHistoryPull();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />
-  </React.StrictMode>
+  </React.StrictMode>,
 );
 
 installDialogueEffects();
