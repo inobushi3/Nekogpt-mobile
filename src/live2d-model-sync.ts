@@ -27,8 +27,21 @@ type Live2DController = {
   bundleProgress: string;
 };
 
+declare global {
+  interface Window {
+    __NEKOGPT_PROD_SHELL_MODEL_SYNC__?: boolean;
+  }
+}
+
+const MODEL_STABILITY_HITS = 2;
+const STALE_MODEL_GUARD_MS = 30_000;
+
 let installed = false;
 let activeModelIdentity = '';
+let candidateModelIdentity = '';
+let candidateModelHits = 0;
+let previousModelIdentity = '';
+let staleModelGuardUntil = 0;
 let refreshInFlight = false;
 let loadingWatcher = 0;
 let safetyWatcher = 0;
@@ -199,8 +212,6 @@ function watchLoadingState() {
       readyTicks += 1;
     }
 
-    // The App clears bundleProgress in handleLive2DLoaded(). Three clean ticks
-    // avoid hiding the overlay during the short "preparing" -> mounted transition.
     if (readyTicks >= 3 || elapsed > 15_000) {
       finishSwap();
     }
@@ -228,17 +239,48 @@ function requestHotSwap(attempt = 0) {
   watchLoadingState();
 }
 
+function resetCandidate() {
+  candidateModelIdentity = '';
+  candidateModelHits = 0;
+}
+
 function acceptSnapshot(value: unknown) {
   const nextIdentity = snapshotIdentity(value);
   if (!nextIdentity) return;
 
   if (!activeModelIdentity) {
     activeModelIdentity = nextIdentity;
+    resetCandidate();
     return;
   }
 
-  if (nextIdentity === activeModelIdentity) return;
+  if (nextIdentity === activeModelIdentity) {
+    resetCandidate();
+    return;
+  }
+
+  if (
+    previousModelIdentity
+    && nextIdentity === previousModelIdentity
+    && Date.now() < staleModelGuardUntil
+  ) {
+    resetCandidate();
+    return;
+  }
+
+  if (nextIdentity !== candidateModelIdentity) {
+    candidateModelIdentity = nextIdentity;
+    candidateModelHits = 1;
+    return;
+  }
+
+  candidateModelHits += 1;
+  if (candidateModelHits < MODEL_STABILITY_HITS || refreshInFlight) return;
+
+  previousModelIdentity = activeModelIdentity;
   activeModelIdentity = nextIdentity;
+  staleModelGuardUntil = Date.now() + STALE_MODEL_GUARD_MS;
+  resetCandidate();
   requestHotSwap();
 }
 
@@ -263,19 +305,25 @@ function handleConnectionPhase(event: Event) {
   if (detail?.phase !== 'disconnected') return;
   if (refreshInFlight) return;
   activeModelIdentity = '';
+  previousModelIdentity = '';
+  staleModelGuardUntil = 0;
+  resetCandidate();
   hideSwitchOverlay();
 }
 
 export function installLive2DModelSync() {
   if (installed || typeof window === 'undefined') return;
-  installed = true;
 
+  // Production shell owns model switching. Never install a second controller
+  // against the same WebSocket/React tree, because two independent swaps can
+  // cancel/restart the Live2D bundle request and create a reload/hot-swap loop.
+  if (window.__NEKOGPT_PROD_SHELL_MODEL_SYNC__) return;
+
+  installed = true;
   window.addEventListener('nekogpt:rpc-response', handleRpcResponse as EventListener);
   window.addEventListener('nekogpt:relay-message', handleRelayMessage as EventListener);
   window.addEventListener('nekogpt:connection-phase', handleConnectionPhase as EventListener);
 
-  // Safety net for the production shell: never let a stale swap mask remain
-  // visible after the hot-swap state has already finished.
   safetyWatcher = window.setInterval(() => {
     if (!refreshInFlight) hideSwitchOverlay();
   }, 500);
