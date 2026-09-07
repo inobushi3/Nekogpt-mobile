@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-revision="context-gauge-v11-20260906">
+<html lang="pt-BR" data-revision="live2d-sync-v12-20260906">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
@@ -32,6 +32,7 @@
     const CONTEXT_LIMIT_CHARS=8000*4,OVERHEAD=16,IMG=360,PDF=1200,FILE=520;
     const pending=new Map();
     let history=[];
+    let live2dModelIdentity='',live2dReloading=false;
     const clean=v=>String(v||'').replace(/\s+/g,' ').trim();
     const clamp=v=>Math.max(0,Math.min(100,Math.round(v)));
     const attachmentChars=a=>{const text=clean(a?.text);if(text)return text.length+OVERHEAD;const mime=clean(a?.mimeType).toLowerCase();if(mime.startsWith('image/'))return IMG;if(mime==='application/pdf')return PDF;return FILE};
@@ -48,7 +49,8 @@
     function percent(){const chars=history.reduce((sum,m)=>sum+m.content.length+OVERHEAD+m.attachments.reduce((n,a)=>n+attachmentChars(a),0),0)+draftChars();return clamp(chars/CONTEXT_LIMIT_CHARS*100)}
     function paint(){const g=ensure();if(!g)return;const p=percent(),fill=g.querySelector('.relationship-gauge__fill'),heart=g.querySelector('.relationship-gauge__heart');if(fill)fill.style.width=`${1.88*p}px`;if(heart)heart.src=p>=100?`${HUD}/hp-icon-active.png`:`${HUD}/hp-icon-base.png`;g.dataset.percent=String(p);g.title=`Contexto do chat ${p}%`;g.setAttribute('aria-label',`Relacionamento · contexto do chat ${p}%`)}
     function acceptHistory(value){history=normalizeHistory(value);paint()}
-    function incoming(message){if(!message||typeof message!=='object')return;if(message.type==='chat.history'){acceptHistory(message.payload);return}if(message.type!=='rpc.response'||!message.id)return;const method=pending.get(message.id);if(!method)return;pending.delete(message.id);if(!message.ok)return;if(method==='companion.chat.history')acceptHistory(message.result);else if(method==='chat.send'&&message.result?.history)acceptHistory(message.result.history)}
+    function acceptSnapshot(value){const s=value&&typeof value==='object'?value:{};const modelId=clean(s.modelId),modelFile=clean(s.modelFile);if(!modelId||!modelFile)return;const next=`${modelId}\u0000${modelFile}`;if(!live2dModelIdentity){live2dModelIdentity=next;return}if(next===live2dModelIdentity||live2dReloading)return;live2dModelIdentity=next;live2dReloading=true;setTimeout(()=>location.reload(),90)}
+    function incoming(message){if(!message||typeof message!=='object')return;if(message.type==='companion.snapshot'||message.type==='companion.snapshot.updated')acceptSnapshot(message.payload);if(message.type==='chat.history'){acceptHistory(message.payload);return}if(message.type!=='rpc.response'||!message.id)return;const method=pending.get(message.id);if(!method)return;pending.delete(message.id);if(!message.ok)return;if(method==='companion.snapshot')acceptSnapshot(message.result);else if(method==='companion.chat.history')acceptHistory(message.result);else if(method==='chat.send'&&message.result?.history)acceptHistory(message.result.history)}
     const Native=window.WebSocket;
     function Wrapped(url,protocols){const ws=protocols===undefined?new Native(url):new Native(url,protocols);const send=ws.send;ws.send=function(data){try{const m=typeof data==='string'?JSON.parse(data):null;if(m?.type==='rpc.request'&&m.id&&m.method)pending.set(m.id,m.method)}catch{}return send.call(ws,data)};ws.addEventListener('message',e=>{if(typeof e.data!=='string')return;try{incoming(JSON.parse(e.data))}catch{}});return ws}
     Wrapped.prototype=Native.prototype;Object.defineProperties(Wrapped,{CONNECTING:{value:Native.CONNECTING},OPEN:{value:Native.OPEN},CLOSING:{value:Native.CLOSING},CLOSED:{value:Native.CLOSED}});window.WebSocket=Wrapped;
