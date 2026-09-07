@@ -22,10 +22,16 @@ type ReactHook = {
   } | null;
 };
 
+type Live2DController = {
+  dispatch: (value: unknown) => void;
+  bundleProgress: string;
+};
+
 let installed = false;
 let activeModelIdentity = '';
 let refreshInFlight = false;
 let loadingWatcher = 0;
+let safetyWatcher = 0;
 
 function clean(value: unknown) {
   return typeof value === 'string' ? value.trim() : '';
@@ -51,7 +57,7 @@ function collectHooks(fiber: ReactFiber) {
   return hooks;
 }
 
-function findBundleRefreshDispatch() {
+function findLive2DController(): Live2DController | null {
   const root = document.getElementById('root') as (HTMLElement & Record<string, unknown>) | null;
   if (!root) return null;
 
@@ -67,6 +73,7 @@ function findBundleRefreshDispatch() {
     const hooks = collectHooks(fiber);
     if (hooks.length > 28) {
       const phase = hooks[3]?.memoizedState;
+      const bundleProgress = hooks[6]?.memoizedState;
       const version = hooks[28]?.memoizedState;
       const dispatch = hooks[28]?.queue?.dispatch;
       if (
@@ -75,7 +82,10 @@ function findBundleRefreshDispatch() {
         && typeof version === 'number'
         && typeof dispatch === 'function'
       ) {
-        return dispatch;
+        return {
+          dispatch,
+          bundleProgress: typeof bundleProgress === 'string' ? bundleProgress : '',
+        };
       }
     }
 
@@ -87,6 +97,9 @@ function findBundleRefreshDispatch() {
 }
 
 function ensureSwitchOverlay() {
+  const shellOverlay = document.querySelector<HTMLElement>('.live2d-switch-mask');
+  if (shellOverlay) return shellOverlay;
+
   let overlay = document.querySelector<HTMLElement>('.live2d-switch-overlay');
   if (overlay) return overlay;
 
@@ -140,40 +153,56 @@ function ensureSwitchOverlay() {
 }
 
 function showSwitchOverlay() {
-  ensureSwitchOverlay().style.display = 'flex';
+  const overlay = ensureSwitchOverlay();
+  if (overlay.classList.contains('live2d-switch-mask')) {
+    overlay.classList.add('is-active');
+  } else {
+    overlay.style.display = 'flex';
+  }
 }
 
 function hideSwitchOverlay() {
-  const overlay = document.querySelector<HTMLElement>('.live2d-switch-overlay');
-  if (overlay) overlay.style.display = 'none';
+  const shellOverlay = document.querySelector<HTMLElement>('.live2d-switch-mask');
+  if (shellOverlay) shellOverlay.classList.remove('is-active');
+
+  const fallbackOverlay = document.querySelector<HTMLElement>('.live2d-switch-overlay');
+  if (fallbackOverlay) fallbackOverlay.style.display = 'none';
 }
 
-function forceLoadingLabel() {
-  const status = document.querySelector<HTMLElement>('.companion-status');
-  if (!status) return false;
-  const labels = status.querySelectorAll<HTMLElement>('span');
-  const label = labels.length > 1 ? labels[labels.length - 1] : null;
-  if (label) label.textContent = 'Trocando de modelo';
-  return true;
+function finishSwap() {
+  refreshInFlight = false;
+  if (loadingWatcher) {
+    window.clearInterval(loadingWatcher);
+    loadingWatcher = 0;
+  }
+  hideSwitchOverlay();
 }
 
 function watchLoadingState() {
   if (loadingWatcher) window.clearInterval(loadingWatcher);
   const startedAt = Date.now();
-  let sawStatus = false;
+  let sawReactLoading = false;
+  let readyTicks = 0;
 
   loadingWatcher = window.setInterval(() => {
-    const hasStatus = forceLoadingLabel();
+    const controller = findLive2DController();
     const hasCompanionScreen = Boolean(document.querySelector('.companion-screen'));
     const elapsed = Date.now() - startedAt;
-    if (hasStatus) sawStatus = true;
+    const progress = controller?.bundleProgress || '';
 
-    const finished = hasCompanionScreen && !hasStatus && (sawStatus || elapsed > 1800);
-    if (finished || elapsed > 25_000) {
-      window.clearInterval(loadingWatcher);
-      loadingWatcher = 0;
-      refreshInFlight = false;
-      hideSwitchOverlay();
+    if (progress) {
+      sawReactLoading = true;
+      readyTicks = 0;
+    } else if (hasCompanionScreen && sawReactLoading) {
+      readyTicks += 1;
+    } else if (hasCompanionScreen && elapsed > 3500) {
+      readyTicks += 1;
+    }
+
+    // The App clears bundleProgress in handleLive2DLoaded(). Three clean ticks
+    // avoid hiding the overlay during the short "preparing" -> mounted transition.
+    if (readyTicks >= 3 || elapsed > 15_000) {
+      finishSwap();
     }
   }, 100);
 }
@@ -185,18 +214,17 @@ function requestHotSwap(attempt = 0) {
     showSwitchOverlay();
   }
 
-  const dispatch = findBundleRefreshDispatch();
-  if (!dispatch) {
+  const controller = findLive2DController();
+  if (!controller) {
     if (attempt < 12) {
       window.setTimeout(() => requestHotSwap(attempt + 1), 80);
       return;
     }
-    refreshInFlight = false;
-    hideSwitchOverlay();
+    finishSwap();
     return;
   }
 
-  dispatch((current: unknown) => (Number(current) || 0) + 1);
+  controller.dispatch((current: unknown) => (Number(current) || 0) + 1);
   watchLoadingState();
 }
 
@@ -233,10 +261,7 @@ function handleConnectionPhase(event: Event) {
     return;
   }
   if (detail?.phase !== 'disconnected') return;
-  if (refreshInFlight) {
-    showSwitchOverlay();
-    return;
-  }
+  if (refreshInFlight) return;
   activeModelIdentity = '';
   hideSwitchOverlay();
 }
@@ -248,4 +273,14 @@ export function installLive2DModelSync() {
   window.addEventListener('nekogpt:rpc-response', handleRpcResponse as EventListener);
   window.addEventListener('nekogpt:relay-message', handleRelayMessage as EventListener);
   window.addEventListener('nekogpt:connection-phase', handleConnectionPhase as EventListener);
+
+  // Safety net for the production shell: never let a stale swap mask remain
+  // visible after the hot-swap state has already finished.
+  safetyWatcher = window.setInterval(() => {
+    if (!refreshInFlight) hideSwitchOverlay();
+  }, 500);
+
+  window.addEventListener('pagehide', () => {
+    if (safetyWatcher) window.clearInterval(safetyWatcher);
+  }, { once: true });
 }
