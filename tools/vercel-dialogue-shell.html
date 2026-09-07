@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-revision="stable-context-reload-v21-20260907">
+<html lang="pt-BR" data-revision="stable-context-reload-v22-20260907">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
@@ -29,15 +29,32 @@
   <div class="live2d-switch-mask" aria-live="polite" aria-label="Trocando de modelo"><span class="live2d-switch-mask__spinner" aria-hidden="true"></span><span>Trocando de modelo</span></div>
   <script>
   (()=>{
+    window.__NEKOGPT_PROD_SHELL_MODEL_SYNC__=true;
     const HUD='https://nekogpt-mobile-p3wp6go4o-inobushi3s-projects.vercel.app';
     const DEFAULT_CONTEXT_CHARS=32000,LM_STUDIO_CONTEXT_CHARS=14000,OVERHEAD=16,IMG=360,PDF=1200,FILE=520;
+    const MODEL_IDENTITY_KEY='nekogpt:live2d-model-identity-v22';
+    const MODEL_SWITCH_GUARD_KEY='nekogpt:live2d-model-switch-guard-v22';
+    const MODEL_SWITCH_GUARD_MS=12000;
     const pending=new Map();
     let history=[],contextLimitChars=DEFAULT_CONTEXT_CHARS;
     let relaySocket=null,pairApproved=false;
     let activeModelIdentity='',candidateModelIdentity='',candidateModelHits=0,reloadingForModel=false;
+    let modelSwitchGuard=null;
+    try{activeModelIdentity=sessionStorage.getItem(MODEL_IDENTITY_KEY)||''}catch{}
+    try{modelSwitchGuard=JSON.parse(sessionStorage.getItem(MODEL_SWITCH_GUARD_KEY)||'null')}catch{modelSwitchGuard=null}
     const clean=v=>String(v||'').replace(/\s+/g,' ').trim();
     const clamp=v=>Math.max(0,Math.min(100,v));
     const identityOf=(modelId,modelFile)=>`${clean(modelId)}\u0000${clean(modelFile)}`;
+    const persistActiveModel=value=>{activeModelIdentity=value;try{sessionStorage.setItem(MODEL_IDENTITY_KEY,value)}catch{}};
+    const persistModelGuard=value=>{modelSwitchGuard=value;try{value?sessionStorage.setItem(MODEL_SWITCH_GUARD_KEY,JSON.stringify(value)):sessionStorage.removeItem(MODEL_SWITCH_GUARD_KEY)}catch{}};
+    const resetCandidate=()=>{candidateModelIdentity='';candidateModelHits=0};
+    const isStalePreviousModel=next=>{
+      const guard=modelSwitchGuard;
+      if(!guard||typeof guard!=='object')return false;
+      const until=Number(guard.until)||0;
+      if(Date.now()>=until){persistModelGuard(null);return false}
+      return next===clean(guard.from);
+    };
     const attachmentChars=a=>{const text=clean(a?.text);if(text)return text.length+OVERHEAD;const mime=clean(a?.mimeType).toLowerCase();if(mime.startsWith('image/'))return IMG;if(mime==='application/pdf')return PDF;return FILE};
     function ensure(){
       const s=document.querySelector('.companion-screen');if(!s)return null;
@@ -60,12 +77,16 @@
       paint();
       const modelId=clean(s.modelId),modelFile=clean(s.modelFile);if(!modelId||!modelFile||reloadingForModel)return;
       const next=identityOf(modelId,modelFile);
-      if(!activeModelIdentity){activeModelIdentity=next;candidateModelIdentity='';candidateModelHits=0;return}
-      if(next===activeModelIdentity){candidateModelIdentity='';candidateModelHits=0;return}
+      if(!activeModelIdentity){persistActiveModel(next);resetCandidate();return}
+      if(next===activeModelIdentity){resetCandidate();return}
+      if(isStalePreviousModel(next)){resetCandidate();return}
       if(next!==candidateModelIdentity){candidateModelIdentity=next;candidateModelHits=1;return}
       candidateModelHits+=1;
       if(candidateModelHits<2)return;
-      activeModelIdentity=next;
+      const previous=activeModelIdentity;
+      persistActiveModel(next);
+      persistModelGuard({from:previous,to:next,until:Date.now()+MODEL_SWITCH_GUARD_MS});
+      resetCandidate();
       reloadingForModel=true;
       showSwapMask();
       window.setTimeout(()=>window.location.reload(),180);
