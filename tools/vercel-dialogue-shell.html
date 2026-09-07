@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-revision="live2d-swap-mask-v15-20260906">
+<html lang="pt-BR" data-revision="live2d-swap-mask-v16-20260906">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
@@ -70,22 +70,29 @@
     }
     function showSwapMask(){document.querySelector('.live2d-switch-mask')?.classList.add('is-active')}
     function hideSwapMask(){document.querySelector('.live2d-switch-mask')?.classList.remove('is-active')}
+    function finishLive2DSwap(){
+      if(live2dLoadingTimer)clearInterval(live2dLoadingTimer);
+      live2dLoadingTimer=0;
+      live2dRefreshing=false;
+      hideSwapMask();
+    }
     function watchLive2DLoading(){
       if(live2dLoadingTimer)clearInterval(live2dLoadingTimer);
-      const started=Date.now();let sawStatus=false;
+      const started=Date.now();let sawStatus=false,readyTicks=0;
       live2dLoadingTimer=setInterval(()=>{
         const hasStatus=!!document.querySelector('.companion-status');
         const hasScreen=!!document.querySelector('.companion-screen');
         const elapsed=Date.now()-started;
-        if(hasStatus)sawStatus=true;
-        if((hasScreen&&!hasStatus&&(sawStatus||elapsed>1800))||elapsed>25000){clearInterval(live2dLoadingTimer);live2dLoadingTimer=0;live2dRefreshing=false;hideSwapMask()}
+        if(hasStatus){sawStatus=true;readyTicks=0}
+        else if(hasScreen&&(sawStatus||elapsed>1800))readyTicks+=1;
+        if(readyTicks>=3||elapsed>12000)finishLive2DSwap();
       },100);
     }
     function refreshLive2DOnly(attempt=0){
       if(live2dRefreshing&&attempt===0)return;
       if(attempt===0){live2dRefreshing=true;showSwapMask()}
       const dispatch=findBundleRefreshDispatch();
-      if(!dispatch){if(attempt<12){setTimeout(()=>refreshLive2DOnly(attempt+1),80);return}live2dRefreshing=false;hideSwapMask();return}
+      if(!dispatch){if(attempt<12){setTimeout(()=>refreshLive2DOnly(attempt+1),80);return}finishLive2DSwap();return}
       dispatch(current=>(Number(current)||0)+1);
       watchLive2DLoading();
     }
@@ -93,7 +100,7 @@
     function incoming(message){
       if(!message||typeof message!=='object')return;
       if(message.type==='pair.approved')pairApproved=true;
-      if(message.type==='relay.peer.left'&&message.role==='desktop'){pairApproved=false;if(live2dRefreshing)showSwapMask()}
+      if(message.type==='relay.peer.left'&&message.role==='desktop')pairApproved=false;
       if(message.type==='companion.snapshot'||message.type==='companion.snapshot.updated')acceptSnapshot(message.payload);
       if(message.type==='chat.history'){acceptHistory(message.payload);return}
       if(message.type!=='rpc.response'||!message.id)return;
@@ -110,7 +117,7 @@
       const send=ws.send;
       ws.send=function(data){try{const m=typeof data==='string'?JSON.parse(data):null;if(m?.type==='rpc.request'&&m.id&&m.method)pending.set(m.id,m.method)}catch{}return send.call(ws,data)};
       ws.addEventListener('message',e=>{if(typeof e.data!=='string')return;try{incoming(JSON.parse(e.data))}catch{}});
-      ws.addEventListener('close',()=>{if(relaySocket===ws){relaySocket=null;pairApproved=false;if(live2dRefreshing)showSwapMask()}});
+      ws.addEventListener('close',()=>{if(relaySocket===ws){relaySocket=null;pairApproved=false}});
       return ws
     }
     Wrapped.prototype=Native.prototype;Object.defineProperties(Wrapped,{CONNECTING:{value:Native.CONNECTING},OPEN:{value:Native.OPEN},CLOSING:{value:Native.CLOSING},CLOSED:{value:Native.CLOSED}});window.WebSocket=Wrapped;
@@ -123,6 +130,7 @@
     document.addEventListener('input',e=>{if(e.target?.closest?.('.floating-composer'))paint()},true);
     setInterval(paint,400);
     setInterval(pollLive2DSnapshot,1800);
+    setInterval(()=>{if(!live2dRefreshing)hideSwapMask()},500);
     setTimeout(paint,0);
     setTimeout(pollLive2DSnapshot,2200);
   })();
