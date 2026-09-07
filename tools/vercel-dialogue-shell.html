@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR" data-revision="live2d-hot-swap-v14-20260906">
+<html lang="pt-BR" data-revision="live2d-swap-mask-v15-20260906">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
@@ -20,11 +20,13 @@
     .floating-chat .floating-messages .app-thinking{position:absolute!important;z-index:12!important;left:50%!important;bottom:2px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:5px!important;width:auto!important;height:24px!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important;color:#f4ead7!important;transform:translateX(-50%)!important;pointer-events:none!important;white-space:nowrap!important}.floating-chat .floating-messages .app-thinking::before{content:'Digitando';margin-right:3px;color:#f4ead7;font-size:14px;font-weight:600;line-height:1;text-shadow:0 1px 4px rgba(0,0,0,.95)}.floating-chat .floating-messages .app-thinking span{display:block!important;width:6px!important;height:6px!important;flex:0 0 6px!important;margin:0!important;border:0!important;border-radius:999px!important;background:#f4ead7!important;box-shadow:0 1px 4px rgba(0,0,0,.78)!important;opacity:.34;animation:nekogptTypingDot 1.05s infinite ease-in-out!important}.floating-chat .floating-messages .app-thinking span:nth-child(2){animation-delay:.14s!important}.floating-chat .floating-messages .app-thinking span:nth-child(3){animation-delay:.28s!important}@keyframes nekogptTypingDot{0%,60%,100%{opacity:.34;transform:translateY(0)}30%{opacity:1;transform:translateY(-4px)}}
     .floating-composer .send-paw-button,.floating-composer .send-paw-button:disabled{top:50%!important;right:6px!important;width:50px!important;height:50px!important;margin:0!important;display:grid!important;place-items:center!important;padding:0!important;overflow:hidden!important;border:1px solid rgba(255,255,255,.72)!important;border-radius:999px!important;background:linear-gradient(145deg,rgba(255,255,255,.13),rgba(255,255,255,.045))!important;-webkit-backdrop-filter:blur(10px) saturate(135%) brightness(1.06)!important;backdrop-filter:blur(10px) saturate(135%) brightness(1.06)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.34),inset 0 -1px 0 rgba(255,255,255,.07),0 4px 12px rgba(0,0,0,.15)!important;color:rgba(255,255,255,.96)!important;opacity:1!important;transform:translateY(-50%)!important}.floating-composer .send-paw-button .paw-icon{display:none!important}.floating-composer .send-paw-button::before{content:'↑'!important;display:block!important;width:auto!important;height:auto!important;margin:0!important;border:0!important;background:transparent!important;box-shadow:none!important;text-shadow:0 1px 3px rgba(0,0,0,.38)!important;color:currentColor!important;font-family:'Segoe UI Symbol','Arial Unicode MS',Arial,sans-serif!important;font-size:35px!important;font-weight:300!important;line-height:1!important;transform:translateY(-1px)!important}.floating-composer .send-paw-button::after{display:none!important}.floating-composer .send-paw-button:not(:disabled):hover{background:linear-gradient(145deg,rgba(255,255,255,.17),rgba(255,255,255,.065))!important;border-color:rgba(255,255,255,.82)!important}.floating-composer .send-paw-button:disabled{background:linear-gradient(145deg,rgba(255,255,255,.085),rgba(255,255,255,.025))!important;border-color:rgba(255,255,255,.46)!important;color:rgba(255,255,255,.72)!important}.floating-composer .send-paw-button:disabled::before{color:rgba(255,255,255,.72)!important}
     .relationship-gauge{position:absolute;z-index:9;top:max(10px,env(safe-area-inset-top));left:10px;width:230px;height:52px;filter:drop-shadow(0 5px 12px rgba(0,0,0,.34));pointer-events:none;user-select:none}.relationship-gauge__track{position:absolute;top:14px;left:0;width:200px;height:24px}.relationship-gauge__base{position:absolute;inset:0;width:200px;height:24px}.relationship-gauge__fill{position:absolute;top:6px;left:6px;width:0;height:12px;overflow:hidden;transition:width .32s cubic-bezier(.2,.72,.2,1)}.relationship-gauge__fill img{position:absolute;top:0;left:0;width:188px;max-width:none;height:12px}.relationship-gauge__heart{position:absolute;top:0;left:176px;width:60px;height:52px}.relationship-gauge[data-percent="100"] .relationship-gauge__heart{filter:drop-shadow(0 0 8px rgba(255,65,130,.38));transform:scale(1.04)}.mic-trigger{position:absolute;z-index:9;top:max(110px,calc(env(safe-area-inset-top) + 108px));right:14px;display:grid;width:42px;height:42px;place-items:center;border:1px solid rgba(255,255,255,.1);border-radius:13px;background:rgba(13,13,18,.78);color:#ff6d88;cursor:pointer;padding:0}.mic-trigger.is-ready{border-color:rgba(46,204,145,.34);background:rgba(18,42,32,.78);color:#2ecc91}.mic-trigger svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.8}
+    .live2d-switch-mask{position:fixed;inset:0;z-index:2147483647;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:rgba(10,9,15,.84);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);color:#fff6e8;font:600 16px/1.2 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;letter-spacing:.01em;pointer-events:all}.live2d-switch-mask.is-active{display:flex}.live2d-switch-mask__spinner{width:28px;height:28px;border:3px solid rgba(255,246,232,.24);border-top-color:#fff6e8;border-radius:999px;animation:live2dSwitchSpin .8s linear infinite}@keyframes live2dSwitchSpin{to{transform:rotate(360deg)}}
     @media(max-width:620px){.floating-messages{gap:12px!important;max-height:clamp(160px,27svh,280px)!important;padding-top:26px!important}.floating-messages:has(.app-thinking){padding-bottom:25px!important}.floating-chat .floating-messages .app-thinking{bottom:1px!important;height:22px!important;gap:4px!important}.relationship-gauge{top:max(8px,env(safe-area-inset-top));left:8px;transform:scale(.82);transform-origin:top left}.mic-trigger{right:12px}.floating-composer .send-paw-button,.floating-composer .send-paw-button:disabled{right:5px!important;width:48px!important;height:48px!important}.floating-composer .send-paw-button::before{font-size:33px!important}}
   </style>
 </head>
 <body>
   <div id="root"></div>
+  <div class="live2d-switch-mask" aria-live="polite" aria-label="Trocando de modelo"><span class="live2d-switch-mask__spinner" aria-hidden="true"></span><span>Trocando de modelo</span></div>
   <script type="module" crossorigin src="https://nekogpt-mobile-7gliy8oyu-inobushi3s-projects.vercel.app/assets/index-j8B69zxv.js"></script>
   <script>
   (()=>{
@@ -66,20 +68,24 @@
       }
       return null;
     }
-    function forceLoadingLabel(){const status=document.querySelector('.companion-status');if(!status)return false;const spans=status.querySelectorAll('span'),label=spans.length>1?spans[spans.length-1]:null;if(label)label.textContent='Carregando modelo...';return true}
+    function showSwapMask(){document.querySelector('.live2d-switch-mask')?.classList.add('is-active')}
+    function hideSwapMask(){document.querySelector('.live2d-switch-mask')?.classList.remove('is-active')}
     function watchLive2DLoading(){
       if(live2dLoadingTimer)clearInterval(live2dLoadingTimer);
       const started=Date.now();let sawStatus=false;
       live2dLoadingTimer=setInterval(()=>{
-        const hasStatus=forceLoadingLabel();if(hasStatus)sawStatus=true;
-        if((sawStatus&&!hasStatus)||Date.now()-started>20000){clearInterval(live2dLoadingTimer);live2dLoadingTimer=0;live2dRefreshing=false}
+        const hasStatus=!!document.querySelector('.companion-status');
+        const hasScreen=!!document.querySelector('.companion-screen');
+        const elapsed=Date.now()-started;
+        if(hasStatus)sawStatus=true;
+        if((hasScreen&&!hasStatus&&(sawStatus||elapsed>1800))||elapsed>25000){clearInterval(live2dLoadingTimer);live2dLoadingTimer=0;live2dRefreshing=false;hideSwapMask()}
       },100);
     }
     function refreshLive2DOnly(attempt=0){
       if(live2dRefreshing&&attempt===0)return;
-      if(attempt===0)live2dRefreshing=true;
+      if(attempt===0){live2dRefreshing=true;showSwapMask()}
       const dispatch=findBundleRefreshDispatch();
-      if(!dispatch){if(attempt<12){setTimeout(()=>refreshLive2DOnly(attempt+1),80);return}live2dRefreshing=false;return}
+      if(!dispatch){if(attempt<12){setTimeout(()=>refreshLive2DOnly(attempt+1),80);return}live2dRefreshing=false;hideSwapMask();return}
       dispatch(current=>(Number(current)||0)+1);
       watchLive2DLoading();
     }
@@ -87,7 +93,7 @@
     function incoming(message){
       if(!message||typeof message!=='object')return;
       if(message.type==='pair.approved')pairApproved=true;
-      if(message.type==='relay.peer.left'&&message.role==='desktop')pairApproved=false;
+      if(message.type==='relay.peer.left'&&message.role==='desktop'){pairApproved=false;if(live2dRefreshing)showSwapMask()}
       if(message.type==='companion.snapshot'||message.type==='companion.snapshot.updated')acceptSnapshot(message.payload);
       if(message.type==='chat.history'){acceptHistory(message.payload);return}
       if(message.type!=='rpc.response'||!message.id)return;
@@ -104,7 +110,7 @@
       const send=ws.send;
       ws.send=function(data){try{const m=typeof data==='string'?JSON.parse(data):null;if(m?.type==='rpc.request'&&m.id&&m.method)pending.set(m.id,m.method)}catch{}return send.call(ws,data)};
       ws.addEventListener('message',e=>{if(typeof e.data!=='string')return;try{incoming(JSON.parse(e.data))}catch{}});
-      ws.addEventListener('close',()=>{if(relaySocket===ws){relaySocket=null;pairApproved=false}});
+      ws.addEventListener('close',()=>{if(relaySocket===ws){relaySocket=null;pairApproved=false;if(live2dRefreshing)showSwapMask()}});
       return ws
     }
     Wrapped.prototype=Native.prototype;Object.defineProperties(Wrapped,{CONNECTING:{value:Native.CONNECTING},OPEN:{value:Native.OPEN},CLOSING:{value:Native.CLOSING},CLOSED:{value:Native.CLOSED}});window.WebSocket=Wrapped;
