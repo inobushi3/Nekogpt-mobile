@@ -1,0 +1,134 @@
+name: Install correct Connect splash v28b
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/install-correct-connect-splash-v28b.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct and validate exact uploaded PNG
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import urllib.request, json, base64, gzip, os, struct, re
+
+          shas = [
+              'c8f0adc0935554ce8bc748ab1a3c2803d79c8979',
+              '25d4390bac0602dd83dc7c02ad7841319d63a9c3',
+              'd89909502d682c2973a51b0e20805ae5574f1318',
+              'd3b7bd3dff806c9e57b0a54b1da5c4951778fb93',
+              '01f3a10ed817a5fcd5f7f96fd0b4f9dad170d254',
+          ]
+          token=os.environ['GH_TOKEN']
+          repo=os.environ['GITHUB_REPOSITORY']
+          pieces=[]
+          for sha in shas:
+              req=urllib.request.Request(
+                  f'https://api.github.com/repos/{repo}/git/blobs/{sha}',
+                  headers={
+                      'Authorization':f'Bearer {token}',
+                      'Accept':'application/vnd.github+json',
+                      'User-Agent':'NekoGPT-splash-reconstructor',
+                  },
+              )
+              with urllib.request.urlopen(req) as r:
+                  obj=json.load(r)
+              raw=base64.b64decode(''.join(obj['content'].split()))
+              print('blob',sha,'api-size',obj.get('size'),'decoded',len(raw),'prefix',raw[:12])
+              pieces.append(raw)
+
+          initial=b''.join(pieces)
+          print('joined',len(initial),'prefix',initial[:20],'suffix',initial[-20:])
+
+          def b64decode_loose(data):
+              compact=re.sub(br'\s+',b'',data)
+              compact += b'='*((4-len(compact)%4)%4)
+              return base64.b64decode(compact, validate=False)
+
+          queue=[('joined',initial)]
+          seen=set()
+          png=None
+          for depth in range(5):
+              nextq=[]
+              for label,data in queue:
+                  key=(len(data),data[:24],data[-24:])
+                  if key in seen:
+                      continue
+                  seen.add(key)
+                  print('candidate',depth,label,len(data),data[:16])
+                  if data.startswith(b'\x89PNG\r\n\x1a\n'):
+                      w,h=struct.unpack('>II',data[16:24])
+                      print('PNG candidate',w,h,len(data),label)
+                      if (w,h)==(2048,1152) and len(data)==547712:
+                          png=data
+                          break
+                  if data.startswith(b'\x1f\x8b'):
+                      try:
+                          nextq.append((label+' -> gzip',gzip.decompress(data)))
+                      except Exception as e:
+                          print('gzip failed',label,repr(e))
+                  try:
+                      decoded=b64decode_loose(data)
+                      if decoded and decoded!=data:
+                          nextq.append((label+' -> b64',decoded))
+                  except Exception as e:
+                      print('b64 failed',label,repr(e))
+              if png is not None:
+                  break
+              queue=nextq
+
+          if png is None:
+              raise SystemExit('Could not reconstruct the expected 2048x1152 / 547712-byte PNG')
+
+          out=Path('public/connect-splash-v28.png')
+          out.parent.mkdir(parents=True,exist_ok=True)
+          out.write_bytes(png)
+          print('validated exact PNG:',out,len(png))
+          PY
+
+      - name: Switch splash to exact second image
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tools/vercel-dialogue-shell.html')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('connect-splash-original-png-v27-20260907','connect-splash-correct-png-v28-20260908',1)
+          old='https://raw.githubusercontent.com/inobushi3/Nekogpt-mobile/main/public/nekogpt-logo.png?v=27'
+          new='https://raw.githubusercontent.com/inobushi3/Nekogpt-mobile/main/public/connect-splash-v28.png?v=28'
+          if old not in s:
+              raise SystemExit('wrong v27 splash URL not found')
+          s=s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
+          PY
+          grep -q 'connect-splash-correct-png-v28-20260908' tools/vercel-dialogue-shell.html
+          grep -q 'public/connect-splash-v28.png?v=28' tools/vercel-dialogue-shell.html
+
+      - name: Commit exact image and remove temporary workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/install-correct-connect-splash-v28.yml
+          rm -f .github/workflows/install-correct-connect-splash-v28b.yml
+          git config user.name 'Ruan Lucas'
+          git config user.email 'ruanlucasns97@gmail.com'
+          git add -A
+          git commit -m 'fix(mobile): use exact second uploaded Connect image'
+          git push origin HEAD:main
