@@ -1,0 +1,74 @@
+name: Install original PNG Connect splash v27
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/install-original-connect-splash-v27.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Switch Connect splash to original PNG
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('tools/vercel-dialogue-shell.html')
+          s = p.read_text(encoding='utf-8')
+
+          s = s.replace('connect-splash-hq-v25-20260907', 'connect-splash-original-png-v27-20260907', 1)
+
+          old_css = '#nekogpt-connect-splash img{display:block;width:min(86vw,360px);height:auto;max-height:72svh;object-fit:contain;user-select:none;-webkit-user-drag:none;pointer-events:none;transform:translateY(-5svh)}'
+          new_css = '#nekogpt-connect-splash img{position:absolute;top:50%;left:50%;display:block;width:auto;height:100svh;max-width:none;max-height:none;object-fit:contain;user-select:none;-webkit-user-drag:none;pointer-events:none;transform:translate(-50%,-50%)}'
+          if old_css not in s:
+              raise SystemExit('expected v25 splash CSS was not found')
+          s = s.replace(old_css, new_css, 1)
+
+          old_src = 'https://raw.githubusercontent.com/inobushi3/Nekogpt-mobile/main/public/connect-splash-hq-v25.webp?v=25'
+          new_src = 'https://raw.githubusercontent.com/inobushi3/Nekogpt-mobile/main/public/nekogpt-logo.png?v=27'
+          if old_src not in s:
+              raise SystemExit('expected v25 splash image URL was not found')
+          s = s.replace(old_src, new_src, 1)
+
+          p.write_text(s, encoding='utf-8')
+          PY
+
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('public/nekogpt-logo.png')
+          data = p.read_bytes()
+          if not data.startswith(b'\x89PNG\r\n\x1a\n'):
+              raise SystemExit('public/nekogpt-logo.png is not a PNG')
+          if len(data) < 500_000:
+              raise SystemExit(f'PNG unexpectedly small: {len(data)} bytes')
+          print(f'PNG OK: {len(data)} bytes')
+          PY
+
+          grep -q 'connect-splash-original-png-v27-20260907' tools/vercel-dialogue-shell.html
+          grep -q 'public/nekogpt-logo.png?v=27' tools/vercel-dialogue-shell.html
+          grep -q 'height:100svh' tools/vercel-dialogue-shell.html
+          rm -f public/connect-splash-hq-v25.webp
+          rm -f .github/workflows/install-original-connect-splash-v27.yml
+
+      - name: Commit original PNG splash
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'Ruan Lucas'
+          git config user.email 'ruanlucasns97@gmail.com'
+          git add -A
+          git commit -m 'fix(mobile): use original PNG Connect splash at full height'
+          git push origin HEAD:main
