@@ -1,0 +1,100 @@
+name: Install correct Connect splash v28
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/install-correct-connect-splash-v28.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct exact uploaded second image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > /tmp/connect-payload.b64
+          for sha in \
+            c8f0adc0935554ce8bc748ab1a3c2803d79c8979 \
+            25d4390bac0602dd83dc7c02ad7841319d63a9c3 \
+            d89909502d682c2973a51b0e20805ae5574f1318 \
+            d3b7bd3dff806c9e57b0a54b1da5c4951778fb93 \
+            01f3a10ed817a5fcd5f7f96fd0b4f9dad170d254
+          do
+            curl -fsSL \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/blobs/${sha}" \
+              | jq -r '.content' | tr -d '\n' | base64 -d >> /tmp/connect-payload.b64
+          done
+
+          base64 -d /tmp/connect-payload.b64 > /tmp/connect-payload.gz
+          gzip -dc /tmp/connect-payload.gz > /tmp/connect-output
+
+          mkdir -p public
+          if python - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/connect-output').read_bytes()
+          raise SystemExit(0 if p.startswith(b'\x89PNG\r\n\x1a\n') else 1)
+          PY
+          then
+            cp /tmp/connect-output public/connect-splash-v28.png
+          else
+            base64 -d /tmp/connect-output > public/connect-splash-v28.png
+          fi
+
+          python - <<'PY'
+          from pathlib import Path
+          import struct
+          p=Path('public/connect-splash-v28.png')
+          data=p.read_bytes()
+          if not data.startswith(b'\x89PNG\r\n\x1a\n'):
+              raise SystemExit('reconstructed file is not PNG')
+          w,h=struct.unpack('>II', data[16:24])
+          print('PNG', w, h, len(data))
+          if (w,h)!=(2048,1152):
+              raise SystemExit(f'unexpected dimensions: {w}x{h}')
+          if len(data)!=547712:
+              raise SystemExit(f'unexpected byte size: {len(data)}')
+          PY
+
+      - name: Point splash to the correct uploaded image
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tools/vercel-dialogue-shell.html')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('connect-splash-original-png-v27-20260907','connect-splash-correct-png-v28-20260908',1)
+          old='https://raw.githubusercontent.com/inobushi3/Nekogpt-mobile/main/public/nekogpt-logo.png?v=27'
+          new='https://raw.githubusercontent.com/inobushi3/Nekogpt-mobile/main/public/connect-splash-v28.png?v=28'
+          if old not in s:
+              raise SystemExit('current wrong splash src was not found')
+          s=s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
+          PY
+          grep -q 'connect-splash-correct-png-v28-20260908' tools/vercel-dialogue-shell.html
+          grep -q 'public/connect-splash-v28.png?v=28' tools/vercel-dialogue-shell.html
+
+      - name: Commit exact splash and cleanup workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/install-correct-connect-splash-v28.yml
+          git config user.name 'Ruan Lucas'
+          git config user.email 'ruanlucasns97@gmail.com'
+          git add -A
+          git commit -m 'fix(mobile): use exact uploaded Connect splash image'
+          git push origin HEAD:main
