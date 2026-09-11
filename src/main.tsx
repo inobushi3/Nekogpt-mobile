@@ -8,6 +8,7 @@ import { installLive2DModelSync } from './live2d-model-sync';
 import { installMobileHistoryPull } from './mobile-history-pull';
 import { installMobileHud } from './mobile-hud';
 import './styles.css';
+import './connection-gate-polish.css';
 import './background-static.css';
 import './dialogue-reference.css';
 import './dialogue-effects.css';
