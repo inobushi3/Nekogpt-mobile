@@ -39,11 +39,19 @@ export function ConnectionGate({
           className="connection-background-blur"
           src={CONNECTION_BACKGROUND_SRC}
           alt=""
+          aria-hidden="true"
+          draggable={false}
+          decoding="async"
         />
         <img
           className="connection-background-sharp"
           src={CONNECTION_BACKGROUND_SRC}
           alt=""
+          aria-hidden="true"
+          draggable={false}
+          decoding="async"
+          loading="eager"
+          fetchPriority="high"
         />
         <span className="connection-background-vignette" />
       </div>
