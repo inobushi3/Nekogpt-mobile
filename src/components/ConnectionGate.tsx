@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CONNECTION_BACKGROUND_SRC } from '../connection-background';
 import { LANGUAGE_OPTIONS, type AppLanguage, saveLanguage, t } from '../i18n';
 import type { ConnectionPhase } from '../types';
 
@@ -11,8 +12,6 @@ type ConnectionGateProps = {
   onLanguageChange: (language: AppLanguage) => void;
   onConnect: (relayUrl: string, pairingCode: string) => void;
 };
-
-const CONNECTION_BACKGROUND_URL = 'https://nekogpt-mobile-aiqv06xcu-inobushi3s-projects.vercel.app/connection-bg.webp';
 
 export function ConnectionGate({
   phase,
@@ -35,12 +34,19 @@ export function ConnectionGate({
 
   return (
     <main className="connection-screen connection-screen--minimal">
-      <img
-        className="connection-background-image"
-        src={CONNECTION_BACKGROUND_URL}
-        alt=""
-        aria-hidden="true"
-      />
+      <div className="connection-background-stage" aria-hidden="true">
+        <img
+          className="connection-background-blur"
+          src={CONNECTION_BACKGROUND_SRC}
+          alt=""
+        />
+        <img
+          className="connection-background-sharp"
+          src={CONNECTION_BACKGROUND_SRC}
+          alt=""
+        />
+        <span className="connection-background-vignette" />
+      </div>
 
       <button
         className={`connection-settings-trigger ${settingsOpen ? 'is-open' : ''}`}
