@@ -1,20 +1,29 @@
 /* Visual-novel pairing-code treatment.
-   Only the code-entry row is changed; the connection background is untouched.
-   Keep selectors compatible with both the current source component and the
-   older production shell, where the --centered modifier may be absent. */
+   The connection artwork stays untouched. This file only positions the
+   connection controls and styles the code-entry strip. */
+
+/* Move the complete connection controls noticeably lower, closer to the
+   visual-novel reference, while keeping them centered and mobile-safe. */
+.connection-screen > .connection-card,
+.connection-screen > .connection-card--minimal,
+.connection-screen--minimal > .connection-card,
+.connection-screen--minimal > .connection-card--minimal {
+  transform: translateY(clamp(96px, 18svh, 170px)) !important;
+}
 
 .connection-screen .connection-code-field,
 .connection-code-field--centered {
   position: relative !important;
   isolation: isolate !important;
-  width: min(84vw, 320px) !important;
+  width: min(78vw, 300px) !important;
   overflow: visible !important;
   border: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
 }
 
-/* Wide, borderless black blur that disappears into both sides of the screen. */
+/* Compact centered black blur. It deliberately stops before the artwork
+   edges and dissolves softly into transparency on both sides. */
 .connection-screen .connection-code-field::before,
 .connection-code-field--centered::before {
   content: '' !important;
@@ -22,8 +31,8 @@
   z-index: 0 !important;
   left: 50% !important;
   bottom: 0 !important;
-  width: 140vw !important;
-  max-width: none !important;
+  width: min(88vw, 430px) !important;
+  max-width: 430px !important;
   height: 58px !important;
   transform: translate3d(-50%, 0, 0) !important;
   pointer-events: none !important;
@@ -32,13 +41,16 @@
   background: linear-gradient(
     90deg,
     rgba(0, 0, 0, 0) 0%,
-    rgba(0, 0, 0, 0.10) 8%,
-    rgba(0, 0, 0, 0.32) 20%,
-    rgba(0, 0, 0, 0.55) 34%,
-    rgba(0, 0, 0, 0.66) 50%,
-    rgba(0, 0, 0, 0.55) 66%,
-    rgba(0, 0, 0, 0.32) 80%,
-    rgba(0, 0, 0, 0.10) 92%,
+    rgba(0, 0, 0, 0.04) 8%,
+    rgba(0, 0, 0, 0.16) 17%,
+    rgba(0, 0, 0, 0.36) 27%,
+    rgba(0, 0, 0, 0.58) 38%,
+    rgba(0, 0, 0, 0.70) 48%,
+    rgba(0, 0, 0, 0.70) 52%,
+    rgba(0, 0, 0, 0.58) 62%,
+    rgba(0, 0, 0, 0.36) 73%,
+    rgba(0, 0, 0, 0.16) 83%,
+    rgba(0, 0, 0, 0.04) 92%,
     rgba(0, 0, 0, 0) 100%
   ) !important;
   -webkit-backdrop-filter: blur(14px) saturate(0.88) !important;
@@ -46,19 +58,23 @@
   -webkit-mask-image: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(0, 0, 0, 0.22) 8%,
-    #000 27%,
-    #000 73%,
-    rgba(0, 0, 0, 0.22) 92%,
+    rgba(0, 0, 0, 0.12) 10%,
+    rgba(0, 0, 0, 0.56) 24%,
+    #000 40%,
+    #000 60%,
+    rgba(0, 0, 0, 0.56) 76%,
+    rgba(0, 0, 0, 0.12) 90%,
     transparent 100%
   ) !important;
   mask-image: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(0, 0, 0, 0.22) 8%,
-    #000 27%,
-    #000 73%,
-    rgba(0, 0, 0, 0.22) 92%,
+    rgba(0, 0, 0, 0.12) 10%,
+    rgba(0, 0, 0, 0.56) 24%,
+    #000 40%,
+    #000 60%,
+    rgba(0, 0, 0, 0.56) 76%,
+    rgba(0, 0, 0, 0.12) 90%,
     transparent 100%
   ) !important;
   opacity: 0.96 !important;
@@ -114,14 +130,22 @@
 }
 
 @media (max-width: 700px) {
+  .connection-screen > .connection-card,
+  .connection-screen > .connection-card--minimal,
+  .connection-screen--minimal > .connection-card,
+  .connection-screen--minimal > .connection-card--minimal {
+    transform: translateY(clamp(105px, 19svh, 155px)) !important;
+  }
+
   .connection-screen .connection-code-field,
   .connection-code-field--centered {
-    width: min(78vw, 300px) !important;
+    width: min(76vw, 292px) !important;
   }
 
   .connection-screen .connection-code-field::before,
   .connection-code-field--centered::before {
-    width: 145vw !important;
+    width: min(86vw, 360px) !important;
+    max-width: 360px !important;
     height: 58px !important;
     -webkit-backdrop-filter: blur(13px) saturate(0.9) !important;
     backdrop-filter: blur(13px) saturate(0.9) !important;
