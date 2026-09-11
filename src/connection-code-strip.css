@@ -129,6 +129,53 @@
   background: transparent !important;
 }
 
+/* Dark glass start button: translucent, softly blurred and neutral so it
+   feels like part of the scene instead of a bright UI overlay. */
+.connection-screen .connection-form > button {
+  border: 1px solid rgba(255, 255, 255, 0.16) !important;
+  background: linear-gradient(
+    180deg,
+    rgba(28, 24, 31, 0.46) 0%,
+    rgba(12, 10, 14, 0.58) 100%
+  ) !important;
+  color: rgba(255, 255, 255, 0.96) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 8px 24px rgba(0, 0, 0, 0.18) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(0.92) !important;
+  backdrop-filter: blur(14px) saturate(0.92) !important;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease !important;
+}
+
+.connection-screen .connection-form > button:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.24) !important;
+  background: linear-gradient(
+    180deg,
+    rgba(38, 33, 42, 0.54) 0%,
+    rgba(15, 13, 18, 0.64) 100%
+  ) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 28px rgba(0, 0, 0, 0.22) !important;
+  transform: translateY(-1px) !important;
+}
+
+.connection-screen .connection-form > button:active:not(:disabled) {
+  transform: translateY(0) scale(0.99) !important;
+}
+
+.connection-screen .connection-form > button:disabled {
+  border-color: rgba(255, 255, 255, 0.09) !important;
+  background: rgba(12, 10, 14, 0.36) !important;
+  color: rgba(255, 255, 255, 0.48) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+  opacity: 1 !important;
+}
+
 @media (max-width: 700px) {
   .connection-screen > .connection-card,
   .connection-screen > .connection-card--minimal,
