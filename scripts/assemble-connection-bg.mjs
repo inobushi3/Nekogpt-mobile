@@ -4,7 +4,13 @@ import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const partsDir = join(root, 'public', 'hq-bg-q95')
-const output = join(root, 'public', 'connection-background-hq.webp')
+const publicDir = join(root, 'public')
+const outputs = [
+  join(publicDir, 'connection-background-hq.webp'),
+  // Compatibility with the currently deployed shell while Vercel switches builds.
+  join(publicDir, 'connection-background-fixed.webp'),
+  join(publicDir, 'connection-bg.webp'),
+]
 
 const parts = (await readdir(partsDir))
   .filter((name) => /^part-\d+\.txt$/.test(name))
@@ -28,5 +34,5 @@ if (
   throw new Error(`Assembled HQ background is invalid (${image.length} bytes)`)
 }
 
-await writeFile(output, image)
-console.log(`Assembled HQ background: ${image.length} bytes`)
+await Promise.all(outputs.map((output) => writeFile(output, image)))
+console.log(`Assembled HQ background aliases: ${image.length} bytes`)
