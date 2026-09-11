@@ -1,0 +1,157 @@
+.connection-screen--minimal {
+  position: relative;
+  min-height: 100dvh;
+  place-items: center;
+  padding: max(84px, calc(env(safe-area-inset-top) + 72px)) 20px max(32px, env(safe-area-inset-bottom));
+  background: #000;
+}
+
+.connection-settings-trigger {
+  position: fixed;
+  z-index: 30;
+  top: max(16px, env(safe-area-inset-top));
+  right: 16px;
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(24, 18, 31, 0.92);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
+  color: #f5edf7;
+  cursor: pointer;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  transition: border-color 160ms ease, background 160ms ease, transform 120ms ease;
+}
+
+.connection-settings-trigger:active {
+  transform: scale(0.96);
+}
+
+.connection-settings-trigger.is-open {
+  border-color: rgba(255, 95, 162, 0.48);
+  background: rgba(46, 30, 51, 0.96);
+}
+
+.connection-settings-trigger svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.connection-settings-panel {
+  position: fixed;
+  z-index: 29;
+  top: max(72px, calc(env(safe-area-inset-top) + 58px));
+  right: 16px;
+  width: min(280px, calc(100vw - 32px));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(24, 18, 31, 0.96);
+  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.48);
+  padding: 16px;
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+
+.connection-settings-panel label {
+  display: grid;
+  gap: 8px;
+}
+
+.connection-settings-panel label > span {
+  color: #d8ccda;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.connection-settings-panel select {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  outline: none;
+  background: #100c16;
+  color: #fff;
+  padding: 0 14px;
+}
+
+.connection-card--minimal {
+  width: min(100%, 390px);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.connection-form--minimal {
+  display: grid;
+  gap: 18px;
+  justify-items: center;
+}
+
+.connection-code-field--centered {
+  width: min(100%, 300px);
+  justify-self: center;
+  text-align: center;
+}
+
+.connection-code-field--centered > span {
+  color: #d8ccda;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.connection-code-field--centered input {
+  width: 100%;
+  min-height: 56px;
+  border-radius: 17px;
+  background: rgba(19, 14, 25, 0.95);
+  font-size: 1.08rem;
+  letter-spacing: 0.12em;
+  text-align: center;
+  padding: 0 18px;
+}
+
+.connection-form--minimal > button {
+  width: min(100%, 220px);
+  min-height: 50px;
+  justify-self: center;
+  border-radius: 15px;
+  font-size: 0.96rem;
+}
+
+.connection-card--minimal .connection-state {
+  width: min(100%, 300px);
+  margin: 16px auto 0;
+}
+
+@media (max-width: 620px) {
+  .connection-screen--minimal {
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
+  .connection-settings-trigger {
+    top: max(12px, env(safe-area-inset-top));
+    right: 12px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .connection-settings-panel {
+    top: max(64px, calc(env(safe-area-inset-top) + 52px));
+    right: 12px;
+    width: min(276px, calc(100vw - 24px));
+  }
+}
