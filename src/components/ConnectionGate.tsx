@@ -22,36 +22,32 @@ export function ConnectionGate({
   onConnect,
 }: ConnectionGateProps) {
   const [pairingCode, setPairingCode] = useState(defaultPairingCode);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => setPairingCode(defaultPairingCode), [defaultPairingCode]);
 
   const busy = phase === 'connecting';
   const cleanPairingCode = pairingCode.trim();
   const canConnect = !busy && cleanPairingCode.length > 0;
-  const actionLabel = phase === 'connecting'
-    ? t(language, 'gate.action.connecting')
-    : t(language, 'gate.action.connect');
+  const actionLabel = busy ? t(language, 'gate.action.connecting') : 'Começar';
 
   return (
-    <main className="connection-screen">
-      <section className="connection-card">
-        <header className="connection-brand">
-          <img src="/nekogpt-logo.png" alt="NekoGPT" />
-        </header>
+    <main className="connection-screen connection-screen--minimal">
+      <button
+        className={`connection-settings-trigger ${settingsOpen ? 'is-open' : ''}`}
+        type="button"
+        onClick={() => setSettingsOpen((value) => !value)}
+        aria-label="Configurações"
+        aria-expanded={settingsOpen}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" />
+          <path d="m19.2 13.6 1.3 1-.2 1.5-1.6.6a7.7 7.7 0 0 1-1 1.7l.2 1.7-1.3.9-1.4-1a8 8 0 0 1-2 .6l-.6 1.6h-1.5l-.6-1.6a8 8 0 0 1-2-.6l-1.4 1-1.3-.9.2-1.7a7.7 7.7 0 0 1-1-1.7l-1.6-.6-.2-1.5 1.3-1a8 8 0 0 1 0-2l-1.3-1 .2-1.5L5 7.5a7.7 7.7 0 0 1 1-1.7L5.8 4l1.3-.9 1.4 1a8 8 0 0 1 2-.6l.6-1.6h1.5l.6 1.6a8 8 0 0 1 2 .6l1.4-1 1.3.9-.2 1.7a7.7 7.7 0 0 1 1 1.7l1.6.6.2 1.5-1.3 1a8 8 0 0 1 0 2Z" />
+        </svg>
+      </button>
 
-        <div className="connection-copy">
-          <p className="connection-kicker">{t(language, 'gate.kicker')}</p>
-          <p>{t(language, 'gate.description')}</p>
-        </div>
-
-        <form
-          className="connection-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!canConnect) return;
-            onConnect(defaultRelayUrl, cleanPairingCode);
-          }}
-        >
+      {settingsOpen && (
+        <section className="connection-settings-panel">
           <label>
             <span>{t(language, 'gate.language')}</span>
             <select
@@ -67,8 +63,19 @@ export function ConnectionGate({
               ))}
             </select>
           </label>
+        </section>
+      )}
 
-          <label className="connection-code-field">
+      <section className="connection-card connection-card--minimal">
+        <form
+          className="connection-form connection-form--minimal"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!canConnect) return;
+            onConnect(defaultRelayUrl, cleanPairingCode);
+          }}
+        >
+          <label className="connection-code-field connection-code-field--centered">
             <span>{t(language, 'gate.codeLabel')}</span>
             <input
               value={pairingCode}
@@ -77,6 +84,7 @@ export function ConnectionGate({
               autoComplete="one-time-code"
               inputMode="text"
               required
+              autoFocus
             />
           </label>
 
