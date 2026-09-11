@@ -12,6 +12,8 @@ type ConnectionGateProps = {
   onConnect: (relayUrl: string, pairingCode: string) => void;
 };
 
+const CONNECTION_BACKGROUND_URL = 'https://nekogpt-mobile-aiqv06xcu-inobushi3s-projects.vercel.app/connection-bg.webp';
+
 export function ConnectionGate({
   phase,
   detail,
@@ -33,6 +35,13 @@ export function ConnectionGate({
 
   return (
     <main className="connection-screen connection-screen--minimal">
+      <img
+        className="connection-background-image"
+        src={CONNECTION_BACKGROUND_URL}
+        alt=""
+        aria-hidden="true"
+      />
+
       <button
         className={`connection-settings-trigger ${settingsOpen ? 'is-open' : ''}`}
         type="button"
