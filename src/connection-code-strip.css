@@ -1,75 +1,70 @@
-/* Pairing-code field inspired by the visual-novel "start story" treatment.
-   This intentionally changes only the code-entry surface; the connection
-   background remains untouched. */
+/* Visual-novel pairing-code treatment.
+   Only the code-entry row is changed; the connection background is untouched. */
 
 .connection-code-field--centered {
   position: relative;
   isolation: isolate;
   width: min(84vw, 320px);
-  padding: 8px 0 6px;
   overflow: visible;
 }
 
+/* A wide blurred black strip that dissolves toward both sides, like a VN menu row. */
 .connection-code-field--centered::before {
   content: '';
   position: absolute;
   z-index: 0;
-  top: 50%;
   left: 50%;
-  width: min(118vw, 560px);
-  height: 76px;
-  transform: translate3d(-50%, -36%, 0);
+  bottom: 0;
+  width: min(130vw, 640px);
+  height: 58px;
+  transform: translate3d(-50%, 0, 0);
   pointer-events: none;
-  background:
-    linear-gradient(
-      90deg,
-      rgba(0, 0, 0, 0) 0%,
-      rgba(0, 0, 0, 0.18) 10%,
-      rgba(0, 0, 0, 0.52) 24%,
-      rgba(0, 0, 0, 0.68) 38%,
-      rgba(0, 0, 0, 0.72) 50%,
-      rgba(0, 0, 0, 0.68) 62%,
-      rgba(0, 0, 0, 0.52) 76%,
-      rgba(0, 0, 0, 0.18) 90%,
-      rgba(0, 0, 0, 0) 100%
-    );
-  -webkit-backdrop-filter: blur(18px) saturate(0.88);
-  backdrop-filter: blur(18px) saturate(0.88);
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0.14) 10%,
+    rgba(0, 0, 0, 0.40) 23%,
+    rgba(0, 0, 0, 0.58) 38%,
+    rgba(0, 0, 0, 0.62) 50%,
+    rgba(0, 0, 0, 0.58) 62%,
+    rgba(0, 0, 0, 0.40) 77%,
+    rgba(0, 0, 0, 0.14) 90%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  -webkit-backdrop-filter: blur(15px) saturate(0.9);
+  backdrop-filter: blur(15px) saturate(0.9);
   -webkit-mask-image: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(0, 0, 0, 0.3) 9%,
+    rgba(0, 0, 0, 0.32) 10%,
     #000 25%,
     #000 75%,
-    rgba(0, 0, 0, 0.3) 91%,
+    rgba(0, 0, 0, 0.32) 90%,
     transparent 100%
   );
   mask-image: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(0, 0, 0, 0.3) 9%,
+    rgba(0, 0, 0, 0.32) 10%,
     #000 25%,
     #000 75%,
-    rgba(0, 0, 0, 0.3) 91%,
+    rgba(0, 0, 0, 0.32) 90%,
     transparent 100%
   );
-  opacity: 0.9;
+  opacity: 0.94;
   transition: opacity 180ms ease, transform 180ms ease;
 }
 
 .connection-code-field--centered:focus-within::before {
   opacity: 1;
-  transform: translate3d(-50%, -36%, 0) scaleX(1.025);
+  transform: translate3d(-50%, 0, 0) scaleX(1.015);
 }
 
 .connection-code-field--centered > span {
   position: relative;
   z-index: 1;
-  margin-bottom: 3px;
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.035em;
+  margin-bottom: 8px;
+  color: rgba(255, 255, 255, 0.82);
   text-shadow: 0 2px 9px rgba(0, 0, 0, 0.9);
 }
 
@@ -78,7 +73,8 @@
   z-index: 1;
   box-sizing: border-box;
   width: 100%;
-  min-height: 50px;
+  min-height: 58px;
+  padding: 0 18px;
   border: 0;
   border-radius: 0;
   outline: 0;
@@ -91,7 +87,6 @@
   letter-spacing: 0.16em;
   text-align: center;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
-  padding: 0 18px;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
@@ -114,10 +109,10 @@
   }
 
   .connection-code-field--centered::before {
-    width: 116vw;
-    height: 72px;
-    -webkit-backdrop-filter: blur(16px) saturate(0.9);
-    backdrop-filter: blur(16px) saturate(0.9);
+    width: 130vw;
+    height: 58px;
+    -webkit-backdrop-filter: blur(14px) saturate(0.9);
+    backdrop-filter: blur(14px) saturate(0.9);
   }
 }
 
