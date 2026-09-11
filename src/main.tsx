@@ -19,6 +19,7 @@ import './mobile-hud.css';
 import './mobile-history-pull.css';
 import './send-button-polish.css';
 import './typing-indicator.css';
+import './connection-code-strip.css';
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
