@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "node scripts/assemble-connection-bg.mjs && tsc -b && vite build",
+    "build": "node scripts/verify-connection-page-lock.mjs && node scripts/assemble-connection-bg.mjs && tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "relay:dev": "wrangler dev --config wrangler.jsonc",
     "relay:deploy": "wrangler deploy --config wrangler.jsonc",
     "test:mobile-vad": "node scripts/test-mobile-vad.mjs",
-    "test:fake-desktop": "node scripts/fake-desktop.mjs"
+    "test:fake-desktop": "node scripts/fake-desktop.mjs",
+    "test:connection-lock": "node scripts/verify-connection-page-lock.mjs"
   },
   "dependencies": {
     "fflate": "^0.8.2",
