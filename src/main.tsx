@@ -23,6 +23,7 @@ import './connection-code-strip.css';
 import './connection-status-hide.css';
 import './settings-glass-visual-match.css';
 import './connection-settings-round.css';
+import './connection-options-panel.css';
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
