@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#090709" />
+  <title>NekoGPT Mobile · Atualizando</title>
+  <style>
+    html,body{height:100%;margin:0;background:#090709;color:#fff;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    body{display:grid;place-items:center;text-align:center;padding:24px;box-sizing:border-box}
+    main{max-width:320px}.dot{width:28px;height:28px;margin:0 auto 16px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:s .75s linear infinite}@keyframes s{to{transform:rotate(360deg)}}p{opacity:.72;font-size:14px}
+  </style>
+</head>
+<body>
+  <main><div class="dot" aria-hidden="true"></div><strong>Atualizando o NekoGPT Mobile…</strong><p id="status">Limpando a versão antiga.</p></main>
+  <script>
+    (async () => {
+      const status = document.getElementById('status');
+      try {
+        if ('serviceWorker' in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+        }
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.filter((key) => key.startsWith('nekogpt-mobile-')).map((key) => caches.delete(key)));
+        }
+        try { sessionStorage.clear(); } catch {}
+        status.textContent = 'Pronto. Abrindo a versão nova…';
+      } catch {
+        status.textContent = 'Abrindo a versão nova…';
+      }
+      window.setTimeout(() => location.replace('/?fresh=20260912-v6'), 150);
+    })();
+  </script>
+</body>
+</html>
