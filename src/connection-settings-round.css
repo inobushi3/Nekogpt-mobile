@@ -1,0 +1,5 @@
+/* Keep the settings gear perfectly circular while preserving the flat glass treatment. */
+.connection-settings-trigger,
+#nekogpt-connect-settings {
+  border-radius: 999px !important;
+}
