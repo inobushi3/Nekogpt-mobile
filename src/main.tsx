@@ -20,6 +20,7 @@ import './mobile-history-pull.css';
 import './send-button-polish.css';
 import './typing-indicator.css';
 import './connection-code-strip.css';
+import './connection-status-hide.css';
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
