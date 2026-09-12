@@ -1,0 +1,43 @@
+/* Perceptual match for the settings gear.
+   The Start button sits over a much brighter part of the artwork, so using
+   the exact same dark RGBA value makes the gear look almost black. This
+   lighter neutral tint keeps the same flat glass language while matching
+   the Start button visually against the darker top-right background. */
+
+html body #nekogpt-connect-settings,
+.connection-screen .connection-settings-trigger,
+.connection-screen--minimal .connection-settings-trigger {
+  border: 1px solid rgba(255, 255, 255, 0.13) !important;
+  border-radius: 15px !important;
+  background: rgba(92, 88, 96, 0.36) !important;
+  color: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: blur(14px) saturate(0.92) !important;
+  backdrop-filter: blur(14px) saturate(0.92) !important;
+  transform: none !important;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease !important;
+}
+
+html body #nekogpt-connect-settings:hover,
+.connection-screen .connection-settings-trigger:hover,
+.connection-screen--minimal .connection-settings-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  background: rgba(98, 94, 102, 0.40) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+html body #nekogpt-connect-settings:active,
+html body #nekogpt-connect-settings.is-open,
+.connection-screen .connection-settings-trigger:active,
+.connection-screen .connection-settings-trigger.is-open,
+.connection-screen--minimal .connection-settings-trigger:active,
+.connection-screen--minimal .connection-settings-trigger.is-open {
+  border-color: rgba(255, 255, 255, 0.18) !important;
+  background: rgba(82, 78, 87, 0.44) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
