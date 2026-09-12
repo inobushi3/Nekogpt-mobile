@@ -1,0 +1,6 @@
+/* The connection progress message is intentionally hidden.
+   Pairing continues normally; only the transient status pill is removed. */
+.connection-screen .connection-state,
+.connection-screen--minimal .connection-state {
+  display: none !important;
+}
