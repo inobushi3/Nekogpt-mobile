@@ -1,0 +1,1 @@
+Recovery point for the frozen connection page is commit a1d100fb8658b1b6ed0149b6a3afa03cf6922dcb. Do not use this file as the source of truth; see CONNECTION_PAGE_LOCK.md on main.
