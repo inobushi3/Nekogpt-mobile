@@ -1,1 +1,1 @@
-Trigger clean Vercel deployment using the repository build after replacing the connection background payload.
+Trigger clean Vercel deployment from the current GitHub source after removing temporary runtime patches. 2026-09-12T00:53Z
