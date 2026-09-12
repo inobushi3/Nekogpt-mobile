@@ -81,6 +81,25 @@
   text-shadow: none !important;
 }
 
+/* Remove only the dialogue-speed button. Do not resize or clip the chat container. */
+.companion-screen .floating-composer > .control-mic-button {
+  display: none !important;
+}
+
+/* With the left button gone, let the field naturally fill the composer's content box.
+   width:auto is intentional: unlike width:100%, it cannot overflow because of borders/padding. */
+.companion-screen .floating-composer .composer-field {
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+.companion-screen .floating-composer .media-preview-strip {
+  left: 0 !important;
+}
+
 @media (max-width: 620px) {
   .floating-composer .send-paw-button,
   .floating-composer .send-paw-button:disabled {
@@ -105,5 +124,12 @@
     font-size: 29px !important;
     line-height: 1 !important;
     transform: translateY(-1px) !important;
+  }
+
+  .companion-screen .floating-composer .composer-field {
+    width: auto !important;
+    max-width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
 }
