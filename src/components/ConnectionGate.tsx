@@ -13,6 +13,23 @@ type ConnectionGateProps = {
   onConnect: (relayUrl: string, pairingCode: string) => void;
 };
 
+const CONNECTION_UI_COPY: Record<AppLanguage, {
+  start: string;
+  settings: string;
+  options: string;
+  subtitles: string;
+  close: string;
+}> = {
+  'pt-BR': { start: 'Começar', settings: 'Configurações', options: 'Opções', subtitles: 'Legenda', close: 'Fechar' },
+  en: { start: 'Start', settings: 'Settings', options: 'Options', subtitles: 'Subtitles', close: 'Close' },
+  es: { start: 'Comenzar', settings: 'Ajustes', options: 'Opciones', subtitles: 'Subtítulos', close: 'Cerrar' },
+  fr: { start: 'Commencer', settings: 'Paramètres', options: 'Options', subtitles: 'Sous-titres', close: 'Fermer' },
+  it: { start: 'Inizia', settings: 'Impostazioni', options: 'Opzioni', subtitles: 'Sottotitoli', close: 'Chiudi' },
+  ja: { start: '開始', settings: '設定', options: 'オプション', subtitles: '字幕', close: '閉じる' },
+  'zh-CN': { start: '开始', settings: '设置', options: '选项', subtitles: '字幕', close: '关闭' },
+  ru: { start: 'Начать', settings: 'Настройки', options: 'Параметры', subtitles: 'Субтитры', close: 'Закрыть' },
+};
+
 export function ConnectionGate({
   phase,
   detail,
@@ -30,7 +47,8 @@ export function ConnectionGate({
   const busy = phase === 'connecting';
   const cleanPairingCode = pairingCode.trim();
   const canConnect = !busy && cleanPairingCode.length > 0;
-  const actionLabel = busy ? t(language, 'gate.action.connecting') : 'Começar';
+  const ui = CONNECTION_UI_COPY[language];
+  const actionLabel = busy ? t(language, 'gate.action.connecting') : ui.start;
 
   return (
     <main className="connection-screen connection-screen--minimal">
@@ -61,7 +79,7 @@ export function ConnectionGate({
         className={`connection-settings-trigger ${settingsOpen ? 'is-open' : ''}`}
         type="button"
         onClick={() => setSettingsOpen((value) => !value)}
-        aria-label="Configurações"
+        aria-label={ui.settings}
         aria-expanded={settingsOpen}
         aria-controls="nekogpt-connect-settings-panel"
       >
@@ -76,7 +94,7 @@ export function ConnectionGate({
           <button
             className="connection-options-backdrop"
             type="button"
-            aria-label="Fechar opções"
+            aria-label={ui.close}
             onClick={() => setSettingsOpen(false)}
           />
 
@@ -90,7 +108,7 @@ export function ConnectionGate({
             <button
               className="connection-options-close"
               type="button"
-              aria-label="Fechar"
+              aria-label={ui.close}
               onClick={() => setSettingsOpen(false)}
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -98,20 +116,20 @@ export function ConnectionGate({
               </svg>
             </button>
 
-            <h2 id="connection-options-title" className="connection-options-title">Opções</h2>
+            <h2 id="connection-options-title" className="connection-options-title">{ui.options}</h2>
 
             <label className="connection-options-row">
               <svg className="connection-options-row__icon" viewBox="0 0 24 24" aria-hidden="true">
                 <rect x="3.5" y="5.5" width="17" height="13" rx="2.5" />
                 <path d="M7 10h4M13 10h4M7 14h3M12 14h5" />
               </svg>
-              <span className="connection-options-row__label">Legenda</span>
+              <span className="connection-options-row__label">{ui.subtitles}</span>
               <svg className="connection-options-row__chevron" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="m9 6 6 6-6 6" />
               </svg>
               <select
                 value={language}
-                aria-label="Legenda"
+                aria-label={ui.subtitles}
                 onChange={(event) => {
                   const nextLanguage = event.currentTarget.value as AppLanguage;
                   saveLanguage(nextLanguage);
