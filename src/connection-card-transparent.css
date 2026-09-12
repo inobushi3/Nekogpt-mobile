@@ -1,0 +1,29 @@
+/* Keep the pairing controls directly over the artwork.
+   Do not render a glass/blurred container behind the whole form. */
+.connection-screen > .connection-card,
+.connection-screen > .connection-card--minimal,
+.connection-screen--minimal > .connection-card,
+.connection-screen--minimal > .connection-card--minimal {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.connection-screen > .connection-card::before,
+.connection-screen > .connection-card::after,
+.connection-screen > .connection-card--minimal::before,
+.connection-screen > .connection-card--minimal::after,
+.connection-screen--minimal > .connection-card::before,
+.connection-screen--minimal > .connection-card::after,
+.connection-screen--minimal > .connection-card--minimal::before,
+.connection-screen--minimal > .connection-card--minimal::after {
+  content: none !important;
+  display: none !important;
+  background: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
