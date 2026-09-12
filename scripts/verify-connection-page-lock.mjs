@@ -21,6 +21,10 @@ function gitBlobSha(content) {
     .digest('hex');
 }
 
+function normalize(text) {
+  return text.replace(/\r\n/g, '\n').trimEnd();
+}
+
 const failures = [];
 
 for (const [path, expected] of Object.entries(lockedFiles)) {
@@ -28,6 +32,20 @@ for (const [path, expected] of Object.entries(lockedFiles)) {
   const actual = gitBlobSha(content);
   if (actual !== expected) {
     failures.push(`${path}\n  expected ${expected}\n  actual   ${actual}`);
+  }
+}
+
+const styles = readFileSync('src/styles.css', 'utf8');
+const companionMarker = '\n.companion-screen {';
+const companionStart = styles.indexOf(companionMarker);
+const baselineStyles = readFileSync('scripts/connection-styles-baseline.css', 'utf8');
+
+if (companionStart < 0) {
+  failures.push('src/styles.css no longer contains the expected .companion-screen boundary');
+} else {
+  const connectionBase = styles.slice(0, companionStart);
+  if (normalize(connectionBase) !== normalize(baselineStyles)) {
+    failures.push('the locked connection/global base section at the top of src/styles.css changed');
   }
 }
 
@@ -55,6 +73,7 @@ if (lastConnectionImport < 0 || firstExecutableLine < 0 || lastConnectionImport 
 if (failures.length) {
   console.error('\nCONNECTION PAGE LOCK FAILED\n');
   console.error('The connection/home page is frozen. Do not modify it while working on the companion/chat page.');
+  console.error('Put new companion/chat styling under .companion-screen instead of changing shared/global connection styles.');
   console.error('If this was an intentional connection-page edit, manually verify the page first, then update the lock.\n');
   console.error(failures.join('\n\n'));
   process.exit(1);
