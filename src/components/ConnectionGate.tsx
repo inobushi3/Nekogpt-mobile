@@ -57,11 +57,13 @@ export function ConnectionGate({
       </div>
 
       <button
+        id="nekogpt-connect-settings"
         className={`connection-settings-trigger ${settingsOpen ? 'is-open' : ''}`}
         type="button"
         onClick={() => setSettingsOpen((value) => !value)}
         aria-label="Configurações"
         aria-expanded={settingsOpen}
+        aria-controls="nekogpt-connect-settings-panel"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" />
@@ -70,23 +72,59 @@ export function ConnectionGate({
       </button>
 
       {settingsOpen && (
-        <section className="connection-settings-panel">
-          <label>
-            <span>{t(language, 'gate.language')}</span>
-            <select
-              value={language}
-              onChange={(event) => {
-                const nextLanguage = event.currentTarget.value as AppLanguage;
-                saveLanguage(nextLanguage);
-                onLanguageChange(nextLanguage);
-              }}
+        <>
+          <button
+            className="connection-options-backdrop"
+            type="button"
+            aria-label="Fechar opções"
+            onClick={() => setSettingsOpen(false)}
+          />
+
+          <section
+            id="nekogpt-connect-settings-panel"
+            className="connection-settings-panel connection-options-panel is-open"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="connection-options-title"
+          >
+            <button
+              className="connection-options-close"
+              type="button"
+              aria-label="Fechar"
+              onClick={() => setSettingsOpen(false)}
             >
-              {LANGUAGE_OPTIONS.map((option) => (
-                <option key={option.code} value={option.code}>{option.label}</option>
-              ))}
-            </select>
-          </label>
-        </section>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M7 7l10 10M17 7 7 17" />
+              </svg>
+            </button>
+
+            <h2 id="connection-options-title" className="connection-options-title">Opções</h2>
+
+            <label className="connection-options-row">
+              <svg className="connection-options-row__icon" viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3.5" y="5.5" width="17" height="13" rx="2.5" />
+                <path d="M7 10h4M13 10h4M7 14h3M12 14h5" />
+              </svg>
+              <span className="connection-options-row__label">Legenda</span>
+              <svg className="connection-options-row__chevron" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m9 6 6 6-6 6" />
+              </svg>
+              <select
+                value={language}
+                aria-label="Legenda"
+                onChange={(event) => {
+                  const nextLanguage = event.currentTarget.value as AppLanguage;
+                  saveLanguage(nextLanguage);
+                  onLanguageChange(nextLanguage);
+                }}
+              >
+                {LANGUAGE_OPTIONS.map((option) => (
+                  <option key={option.code} value={option.code}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+          </section>
+        </>
       )}
 
       <section className="connection-card connection-card--minimal">
