@@ -167,6 +167,41 @@
   opacity: 1 !important;
 }
 
+/* Match the settings gear to the same flat glass language as Start.
+   Covers both the source component class and the production-shell id. */
+.connection-settings-trigger,
+#nekogpt-connect-settings {
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  background: rgba(14, 12, 17, 0.50) !important;
+  color: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: blur(14px) saturate(0.92) !important;
+  backdrop-filter: blur(14px) saturate(0.92) !important;
+  transform: none !important;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease !important;
+}
+
+.connection-settings-trigger:hover,
+#nekogpt-connect-settings:hover {
+  border-color: rgba(255, 255, 255, 0.20) !important;
+  background: rgba(18, 15, 21, 0.56) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.connection-settings-trigger:active,
+#nekogpt-connect-settings:active,
+.connection-settings-trigger.is-open,
+#nekogpt-connect-settings.is-open {
+  border-color: rgba(255, 255, 255, 0.20) !important;
+  background: rgba(12, 10, 15, 0.60) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
 @media (max-width: 700px) {
   .connection-screen > .connection-card,
   .connection-screen > .connection-card--minimal,
