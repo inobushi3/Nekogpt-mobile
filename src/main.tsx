@@ -24,6 +24,7 @@ import './connection-status-hide.css';
 import './settings-glass-visual-match.css';
 import './connection-settings-round.css';
 import './connection-options-panel.css';
+import './connection-card-transparent.css';
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   const reloadKey = 'nekogpt:sw-v6-controller-reload';
