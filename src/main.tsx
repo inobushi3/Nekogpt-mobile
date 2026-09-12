@@ -26,9 +26,26 @@ import './connection-settings-round.css';
 import './connection-options-panel.css';
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js');
+  const reloadKey = 'nekogpt:sw-v6-controller-reload';
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    try {
+      if (sessionStorage.getItem(reloadKey) === '1') return;
+      sessionStorage.setItem(reloadKey, '1');
+    } catch {}
+    window.location.reload();
   });
+
+  void (async () => {
+    try {
+      const registration = await navigator.serviceWorker.register('/sw.js', {
+        updateViaCache: 'none',
+      });
+      await registration.update();
+    } catch {
+      // The app must keep working even when service workers are unavailable.
+    }
+  })();
 }
 
 installDialogueWindow();
