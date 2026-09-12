@@ -77,12 +77,24 @@
 @media (max-width: 620px) {
   .floating-composer .send-paw-button,
   .floating-composer .send-paw-button:disabled {
-    right: 5px !important;
-    width: 48px !important;
-    height: 48px !important;
+    top: 50% !important;
+    right: 4px !important;
+    display: grid !important;
+    width: 38px !important;
+    min-width: 38px !important;
+    max-width: 38px !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    max-height: 38px !important;
+    padding: 0 !important;
+    place-items: center !important;
+    box-sizing: border-box !important;
+    transform: translateY(-50%) !important;
   }
 
   .floating-composer .send-paw-button::before {
-    font-size: 33px !important;
+    font-size: 29px !important;
+    line-height: 1 !important;
+    transform: translateY(-1px) !important;
   }
 }
