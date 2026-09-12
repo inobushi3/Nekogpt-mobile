@@ -1,0 +1,5 @@
+{
+  "name": "connection-page-perfect-20260912",
+  "baselineCommit": "a1d100fb8658b1b6ed0149b6a3afa03cf6922dcb",
+  "note": "Frozen connection/home page baseline. Companion/chat work must not modify the protected surface."
+}
