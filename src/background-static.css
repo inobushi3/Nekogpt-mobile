@@ -8,22 +8,20 @@
   background-color: #000 !important;
 }
 
+/* Use the uploaded image directly on the screen instead of a pseudo-element.
+   This keeps it visible after Live2D finishes initializing. */
 .companion-screen.has-mobile-background {
-  background-image: none !important;
-  background-color: #000 !important;
-}
-
-.companion-screen::before {
-  background: none !important;
-  opacity: 0 !important;
-}
-
-.companion-screen.has-mobile-background::before {
   background-image: var(--mobile-background-image) !important;
   background-position: center center !important;
   background-size: cover !important;
   background-repeat: no-repeat !important;
-  opacity: 0.72 !important;
+  background-color: #000 !important;
+}
+
+.companion-screen::before,
+.companion-screen.has-mobile-background::before {
+  background: none !important;
+  opacity: 0 !important;
 }
 
 .live2d-stage {
@@ -40,6 +38,6 @@
 
 .companion-screen.has-mobile-background::after {
   background:
-    radial-gradient(circle at 50% 46%, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.66) 72%),
-    linear-gradient(180deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.74)) !important;
+    radial-gradient(circle at 50% 46%, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.52) 78%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.56)) !important;
 }
