@@ -5,3 +5,11 @@
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
+
+/* Taller mobile chat viewport: show more conversation without changing app logic. */
+@media (max-width: 620px) and (min-height: 621px) {
+  .floating-messages {
+    height: clamp(210px, 28dvh, 250px) !important;
+    max-height: none !important;
+  }
+}
