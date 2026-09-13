@@ -22,3 +22,57 @@
     max-height: none !important;
   }
 }
+
+/* Media preview: show only the selected image, without filename/card chrome. */
+.floating-composer .media-preview-card {
+  position: relative !important;
+  display: block !important;
+  width: fit-content !important;
+  max-width: none !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.floating-composer .media-preview-card > span {
+  display: none !important;
+}
+
+.floating-composer .media-preview-card img,
+.floating-composer .media-preview-card video {
+  display: block !important;
+  width: 64px !important;
+  height: 64px !important;
+  object-fit: cover !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+}
+
+/* Keep remove control usable, but overlay it on the image instead of beside it. */
+.floating-composer .media-preview-card > button {
+  position: absolute !important;
+  top: -7px !important;
+  right: -7px !important;
+  width: 23px !important;
+  height: 23px !important;
+  padding: 0 !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  border-radius: 999px !important;
+  background: rgba(16, 12, 18, 0.78) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.38) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.floating-composer .media-preview-card > button svg {
+  width: 13px !important;
+  height: 13px !important;
+}
