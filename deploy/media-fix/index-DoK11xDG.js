@@ -8,8 +8,8 @@ html body .companion-screen .settings-panel {
   border-radius: 18px !important;
   background:
     linear-gradient(145deg, rgba(255,255,255,0.055), rgba(255,255,255,0.012) 42%, rgba(0,0,0,0.055)),
-    rgba(15, 13, 17, 0.42) !important;
-  box-shadow: 0 14px 42px rgba(0, 0, 0, 0.22) !important;
+    rgba(10, 9, 12, 0.58) !important;
+  box-shadow: 0 14px 42px rgba(0, 0, 0, 0.28) !important;
   -webkit-backdrop-filter: blur(24px) saturate(1.05) !important;
   backdrop-filter: blur(24px) saturate(1.05) !important;
   overflow: hidden !important;
@@ -41,7 +41,7 @@ html body .companion-screen .settings-panel b {
     border-radius: 17px !important;
     background:
       linear-gradient(145deg, rgba(255,255,255,0.055), rgba(255,255,255,0.012) 42%, rgba(0,0,0,0.055)),
-      rgba(14, 12, 16, 0.38) !important;
+      rgba(10, 9, 12, 0.54) !important;
     -webkit-backdrop-filter: blur(22px) saturate(1.02) !important;
     backdrop-filter: blur(22px) saturate(1.02) !important;
   }
