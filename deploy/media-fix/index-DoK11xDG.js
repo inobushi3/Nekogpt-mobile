@@ -49,19 +49,10 @@ html body .companion-screen .settings-panel .background-controls button:first-ch
   min-height: 38px !important;
   padding: 0 10px !important;
   color: rgba(255, 255, 255, 0.96) !important;
-  background:
-    linear-gradient(
-      145deg,
-      rgba(255, 255, 255, 0.09),
-      rgba(255, 255, 255, 0.03) 42%,
-      rgba(0, 0, 0, 0.12)
-    ),
-    rgba(18, 17, 22, 0.48) !important;
+  background: rgba(18, 17, 22, 0.48) !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
   border-radius: 10px !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 6px 18px rgba(0, 0, 0, 0.16) !important;
+  box-shadow: none !important;
   -webkit-backdrop-filter: blur(14px) saturate(1.05) !important;
   backdrop-filter: blur(14px) saturate(1.05) !important;
   font-size: 0.7rem !important;
@@ -70,18 +61,9 @@ html body .companion-screen .settings-panel .background-controls button:first-ch
 
 html body .companion-screen .settings-panel .camera-controls button.is-active {
   color: rgba(255, 255, 255, 0.98) !important;
-  background:
-    linear-gradient(
-      145deg,
-      rgba(255, 255, 255, 0.12),
-      rgba(255, 255, 255, 0.04) 42%,
-      rgba(0, 0, 0, 0.14)
-    ),
-    rgba(24, 30, 28, 0.58) !important;
+  background: rgba(24, 30, 28, 0.58) !important;
   border: 1px solid rgba(83, 221, 167, 0.28) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.10),
-    0 6px 18px rgba(0, 0, 0, 0.18) !important;
+  box-shadow: none !important;
 }
 
 @media (max-width: 620px) {
