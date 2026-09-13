@@ -90,6 +90,12 @@
   height: 22px !important;
 }
 
+/* The panel keeps its original size and position. It only renders above the
+   fixed right-side buttons, so the buttons can no longer sit on top of it. */
+.companion-screen .settings-panel {
+  z-index: 20 !important;
+}
+
 @media (max-width: 700px) {
   .companion-screen .settings-trigger,
   .companion-screen .audio-trigger,
