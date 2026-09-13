@@ -1,14 +1,23 @@
+import { t, getSavedLanguage } from '../i18n';
 import type {
-  ConnectionPhase,
+  CompanionChatHistory,
+  CompanionLive2DState,
+  CompanionSnapshot,
+  CompanionTtsAudio,
   Live2DBundle,
   Live2DBundleMetadata,
   RelayMessage,
-  RpcResponse,
 } from '../types';
-import { getSavedLanguage, t } from '../i18n';
 
-type EventListener = (message: RelayMessage) => void;
-type PhaseListener = (phase: ConnectionPhase, detail?: string) => void;
+export const DEFAULT_RELAY_URL = import.meta.env.VITE_RELAY_URL || 'wss://nekogpt-mobile-relay.inobushi3.workers.dev';
+const SESSION_STORAGE_KEY = 'nekogpt:mobile-session';
+const RPC_TIMEOUT_MS = 20_000;
+const BUNDLE_TIMEOUT_MS = 90_000;
+
+export type ConnectionConfig = {
+  relayUrl: string;
+  code: string;
+};
 
 type PendingRpc = {
   method: string;
@@ -25,378 +34,296 @@ type PendingTransfer = {
   timer: number;
 };
 
-const RPC_TIMEOUT_MS = 90_000;
-const BUNDLE_TIMEOUT_MS = 120_000;
-const PAIRING_TIMEOUT_MS = 15_000;
-const RECONNECT_BASE_DELAY_MS = 900;
-const RECONNECT_MAX_DELAY_MS = 8_000;
-export const DEFAULT_RELAY_URL = import.meta.env.VITE_NEKOGPT_RELAY_URL || 'ws://127.0.0.1:8787/connect';
-const SAVED_RELAY_URL_KEY = 'nekogpt:relay-url';
-const SAVED_PAIRING_CODE_KEY = 'nekogpt:pairing-code';
+type StoredSession = {
+  relayUrl: string;
+  code: string;
+};
 
-function copy(key: Parameters<typeof t>[1]) {
-  return t(getSavedLanguage(), key);
+function copy(key: Parameters<typeof t>[1], vars?: Parameters<typeof t>[2]) {
+  return t(getSavedLanguage(), key, vars);
 }
 
-function resumeTokenKey(pairingCode: string) {
-  return `nekogpt:resume-token:${pairingCode.trim().toUpperCase()}`;
+function normalizeRelayUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return DEFAULT_RELAY_URL;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed.replace(/^http/i, 'ws').replace(/\/$/, '');
+  if (!/^wss?:\/\//i.test(trimmed)) return `wss://${trimmed.replace(/\/$/, '')}`;
+  return trimmed.replace(/\/$/, '');
 }
 
-function normalizePairingCode(value: unknown) {
-  return String(value || '').trim().toUpperCase();
+function normalizeCode(value: string) {
+  return value.trim().toUpperCase().replace(/\s+/g, '');
 }
 
-export function getSavedConnectionConfig() {
-  if (typeof localStorage === 'undefined') return null;
-  const pairingCode = normalizePairingCode(localStorage.getItem(SAVED_PAIRING_CODE_KEY));
-  if (!pairingCode) return null;
-  return {
-    relayUrl: localStorage.getItem(SAVED_RELAY_URL_KEY) || DEFAULT_RELAY_URL,
-    pairingCode,
-  };
-}
-
-function cleanRelayUrl(value: string) {
-  const raw = value.trim() || DEFAULT_RELAY_URL;
+function dataUrlToBlob(dataUrl: string) {
+  const match = /^data:([^;,]+)?(?:;charset=[^;,]+)?(;base64)?,(.*)$/i.exec(dataUrl);
+  if (!match) return null;
+  const mimeType = match[1] || 'application/octet-stream';
+  const base64 = Boolean(match[2]);
+  const body = match[3] || '';
   try {
-    const url = new URL(raw);
-    if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
-      throw new Error(copy('connection.error.invalidRelay'));
-    }
-    return url.toString();
-  } catch (error) {
-    if (raw !== DEFAULT_RELAY_URL) {
-      localStorage.setItem(SAVED_RELAY_URL_KEY, DEFAULT_RELAY_URL);
-    }
-    if (error instanceof Error && error.message.includes('ws://')) throw error;
-    throw new Error(copy('connection.error.invalidRelay'));
+    const bytes = base64
+      ? Uint8Array.from(atob(body), (char) => char.charCodeAt(0))
+      : new TextEncoder().encode(decodeURIComponent(body));
+    return new Blob([bytes], { type: mimeType });
+  } catch {
+    return null;
   }
 }
 
-function buildSocketUrl(relayUrl: string, pairingCode: string) {
-  const url = new URL(cleanRelayUrl(relayUrl));
-  url.searchParams.set('role', 'mobile');
-  url.searchParams.set('room', pairingCode.trim().toUpperCase());
-  url.searchParams.set('client', 'nekogpt-mobile');
-  return url.toString();
+function joinBase64Chunks(chunks: string[]) {
+  return chunks.join('');
 }
 
-function decodeBase64Chunks(chunks: string[], byteLength: number) {
-  const joined = chunks.join('');
-  const binary = atob(joined);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
-  if (byteLength && bytes.byteLength !== byteLength) {
-    throw new Error(copy('connection.error.incompleteBundle'));
-  }
-  return bytes;
+function decodeBase64Utf8(value: string) {
+  const bytes = Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
 }
 
-function dispatchBrowserEvent(name: string, detail: unknown) {
-  if (typeof window === 'undefined' || typeof CustomEvent === 'undefined') return;
-  window.dispatchEvent(new CustomEvent(name, { detail }));
+function decodeTransferredBundle(metadata: Live2DBundleMetadata, chunks: string[]): Live2DBundle {
+  const raw = decodeBase64Utf8(joinBase64Chunks(chunks));
+  const parsed = JSON.parse(raw) as Live2DBundle;
+  if (!parsed || typeof parsed !== 'object') throw new Error(copy('connection.error.bundleInvalid'));
+  return parsed;
 }
+
+export function getSavedConnectionConfig(): ConnectionConfig {
+  try {
+    const raw = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (!raw) return { relayUrl: DEFAULT_RELAY_URL, code: '' };
+    const parsed = JSON.parse(raw) as Partial<StoredSession>;
+    return {
+      relayUrl: normalizeRelayUrl(typeof parsed.relayUrl === 'string' ? parsed.relayUrl : DEFAULT_RELAY_URL),
+      code: normalizeCode(typeof parsed.code === 'string' ? parsed.code : ''),
+    };
+  } catch {
+    return { relayUrl: DEFAULT_RELAY_URL, code: '' };
+  }
+}
+
+function saveConnectionConfig(config: ConnectionConfig) {
+  try {
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
+      relayUrl: normalizeRelayUrl(config.relayUrl),
+      code: normalizeCode(config.code),
+    } satisfies StoredSession));
+  } catch {}
+}
+
+type NekoConnectionHandlers = {
+  onOpen?: () => void;
+  onClose?: (reason?: string) => void;
+  onError?: (error: Error) => void;
+  onApproved?: () => void;
+  onDenied?: (message?: string) => void;
+  onSnapshot?: (snapshot: CompanionSnapshot) => void;
+  onChatHistory?: (history: CompanionChatHistory) => void;
+  onLive2DState?: (state: CompanionLive2DState) => void;
+  onTtsAudio?: (audio: CompanionTtsAudio) => void;
+  onRelayMessage?: (message: RelayMessage) => void;
+};
 
 export class NekoConnection {
   private socket: WebSocket | null = null;
-  private phaseListeners = new Set<PhaseListener>();
-  private eventListeners = new Set<EventListener>();
+  private handlers: NekoConnectionHandlers;
+  private config: ConnectionConfig | null = null;
+  private approved = false;
   private pendingRpc = new Map<string, PendingRpc>();
   private pendingTransfers = new Map<string, PendingTransfer>();
-  private approved = false;
-  private pairingCode = '';
-  private relayUrl = '';
-  private pairingTimer: number | null = null;
-  private reconnectTimer: number | null = null;
-  private reconnectAttempts = 0;
-  private reconnecting = false;
-  private manualDisconnect = false;
-  private reconnectOnNextClose = false;
+
+  constructor(handlers: NekoConnectionHandlers = {}) {
+    this.handlers = handlers;
+  }
+
+  setHandlers(handlers: NekoConnectionHandlers) {
+    this.handlers = handlers;
+  }
 
   get connected() {
     return this.socket?.readyState === WebSocket.OPEN && this.approved;
   }
 
-  onPhase(listener: PhaseListener) {
-    this.phaseListeners.add(listener);
-    return () => this.phaseListeners.delete(listener);
-  }
-
-  onEvent(listener: EventListener) {
-    this.eventListeners.add(listener);
-    return () => this.eventListeners.delete(listener);
-  }
-
-  private emitPhase(phase: ConnectionPhase, detail?: string) {
-    this.phaseListeners.forEach((listener) => listener(phase, detail));
-    dispatchBrowserEvent('nekogpt:connection-phase', { phase, detail });
-  }
-
-  private emitEvent(message: RelayMessage) {
-    this.eventListeners.forEach((listener) => listener(message));
-    dispatchBrowserEvent('nekogpt:relay-message', message);
-  }
-
-  private clearPairingTimer() {
-    if (this.pairingTimer === null) return;
-    window.clearTimeout(this.pairingTimer);
-    this.pairingTimer = null;
-  }
-
-  private clearReconnectTimer() {
-    if (this.reconnectTimer === null) return;
-    window.clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = null;
-  }
-
-  private canReconnect() {
-    return !this.manualDisconnect && Boolean(this.relayUrl && this.pairingCode);
-  }
-
-  private scheduleReconnect() {
-    if (!this.canReconnect()) {
-      this.reconnecting = false;
-      this.emitPhase('disconnected', copy('connection.error.desktopOffline'));
-      return;
-    }
-    if (this.reconnectTimer !== null) return;
-    this.reconnecting = true;
-    const delay = Math.min(
-      RECONNECT_MAX_DELAY_MS,
-      Math.round(RECONNECT_BASE_DELAY_MS * (1.55 ** Math.min(this.reconnectAttempts, 6))),
-    );
-    this.reconnectAttempts += 1;
-    this.emitPhase('connected', copy('connection.error.desktopOffline'));
-    this.reconnectTimer = window.setTimeout(() => {
-      this.reconnectTimer = null;
-      if (!this.canReconnect()) return;
-      this.openSocket();
-    }, delay);
-  }
-
-  private startPairingTimer(socket: WebSocket) {
-    this.clearPairingTimer();
-    this.pairingTimer = window.setTimeout(() => {
-      if (this.socket !== socket || this.approved) return;
-      this.clearPairingTimer();
-      this.rejectPending(new Error(copy('connection.error.desktopOffline')));
-      if (!this.reconnecting) this.emitPhase('error', copy('connection.error.desktopOffline'));
-      socket.close(4004, 'desktop did not approve connection');
-    }, PAIRING_TIMEOUT_MS);
-  }
-
-  connect(relayUrl: string, pairingCode: string) {
-    this.disconnect(false);
-    this.clearPairingTimer();
-    this.clearReconnectTimer();
-    this.manualDisconnect = false;
-    this.reconnecting = false;
-    this.reconnectOnNextClose = false;
-    this.reconnectAttempts = 0;
-    this.approved = false;
-    this.pairingCode = normalizePairingCode(pairingCode);
-    try {
-      const cleanedRelayUrl = cleanRelayUrl(relayUrl);
-      this.relayUrl = cleanedRelayUrl;
-      localStorage.setItem(SAVED_RELAY_URL_KEY, cleanedRelayUrl);
-    } catch (error) {
-      this.emitPhase('error', error instanceof Error ? error.message : String(error));
-      return;
-    }
-
-    this.emitPhase('connecting');
-    this.openSocket();
-  }
-
-  private openSocket() {
-    if (!this.relayUrl || !this.pairingCode) {
-      this.emitPhase('error', copy('connection.error.invalidRelay'));
-      return;
-    }
-    const socketUrl = buildSocketUrl(this.relayUrl, this.pairingCode);
-    const socket = new WebSocket(socketUrl);
-    this.socket = socket;
-
-    socket.addEventListener('open', () => {
-      if (this.socket !== socket) return;
-      this.emitPhase('connecting');
-      this.send({
-        type: 'pair.request',
-        payload: {
-          deviceName: navigator.userAgent.includes('Mobile') ? 'Celular' : 'Navegador',
-          userAgent: navigator.userAgent.slice(0, 240),
-          resumeToken: localStorage.getItem(resumeTokenKey(this.pairingCode)) || '',
-        },
-      });
-      this.startPairingTimer(socket);
-    });
-
-    socket.addEventListener('message', (event) => {
-      if (this.socket !== socket) return;
-      if (typeof event.data !== 'string') return;
-      try {
-        this.handleMessage(JSON.parse(event.data) as RelayMessage);
-      } catch {
-        this.emitEvent({ type: 'protocol.error', payload: copy('connection.error.invalidProtocol') });
-      }
-    });
-
-    socket.addEventListener('close', () => {
-      if (this.socket !== socket) return;
-      this.clearPairingTimer();
-      const shouldReconnect = this.canReconnect() && (this.approved || this.reconnecting || this.reconnectOnNextClose);
-      this.approved = false;
-      this.socket = null;
-      this.reconnectOnNextClose = false;
-      this.rejectPending(new Error(copy('connection.error.closed')));
-      if (shouldReconnect) {
-        this.scheduleReconnect();
-      } else {
-        this.reconnecting = false;
-        this.emitPhase('disconnected');
-      }
-    });
-
-    socket.addEventListener('error', () => {
-      if (this.socket !== socket) return;
-      this.clearPairingTimer();
-      if (this.reconnecting) return;
-      this.emitPhase('error', copy('connection.error.unreachableRelay'));
-    });
-  }
-
-  disconnect(emit = true) {
-    this.clearPairingTimer();
-    this.clearReconnectTimer();
-    this.manualDisconnect = true;
-    this.reconnecting = false;
-    this.reconnectOnNextClose = false;
-    this.approved = false;
-    this.socket?.close(1000, 'client disconnect');
-    this.socket = null;
-    this.rejectPending(new Error(copy('connection.error.ended')));
-    if (emit) this.emitPhase('disconnected');
-  }
-
-  logout() {
-    const activePairingCode = this.pairingCode;
-    const savedPairingCode = typeof localStorage !== 'undefined'
-      ? normalizePairingCode(localStorage.getItem(SAVED_PAIRING_CODE_KEY))
-      : '';
+  connect(config: ConnectionConfig) {
     this.disconnect();
-    if (activePairingCode) localStorage.removeItem(resumeTokenKey(activePairingCode));
-    if (savedPairingCode && savedPairingCode !== activePairingCode) {
-      localStorage.removeItem(resumeTokenKey(savedPairingCode));
-    }
-    localStorage.removeItem(SAVED_PAIRING_CODE_KEY);
-    localStorage.removeItem(SAVED_RELAY_URL_KEY);
-    this.pairingCode = '';
+    const normalized: ConnectionConfig = {
+      relayUrl: normalizeRelayUrl(config.relayUrl),
+      code: normalizeCode(config.code),
+    };
+    this.config = normalized;
+    saveConnectionConfig(normalized);
+
+    return new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const socket = new WebSocket(normalized.relayUrl);
+      this.socket = socket;
+
+      socket.addEventListener('open', () => {
+        this.handlers.onOpen?.();
+        this.send({ type: 'mobile.connect', code: normalized.code });
+      });
+
+      socket.addEventListener('message', async (event) => {
+        try {
+          const raw = typeof event.data === 'string' ? event.data : await event.data.text();
+          const message = JSON.parse(raw) as RelayMessage;
+          this.handleMessage(message);
+          if (message.type === 'mobile.approved') {
+            this.approved = true;
+            this.handlers.onApproved?.();
+            if (!settled) {
+              settled = true;
+              resolve();
+            }
+          } else if (message.type === 'mobile.denied') {
+            this.handlers.onDenied?.(typeof message.message === 'string' ? message.message : undefined);
+            if (!settled) {
+              settled = true;
+              reject(new Error(typeof message.message === 'string' ? message.message : copy('connection.error.denied')));
+            }
+          }
+        } catch (error) {
+          this.handlers.onError?.(error instanceof Error ? error : new Error(String(error)));
+        }
+      });
+
+      socket.addEventListener('close', (event) => {
+        this.approved = false;
+        this.rejectAllPending(new Error(copy('connection.error.closed')));
+        this.handlers.onClose?.(event.reason || undefined);
+        if (!settled) {
+          settled = true;
+          reject(new Error(event.reason || copy('connection.error.closed')));
+        }
+      });
+
+      socket.addEventListener('error', () => {
+        const error = new Error(copy('connection.error.socket'));
+        this.handlers.onError?.(error);
+        if (!settled) {
+          settled = true;
+          reject(error);
+        }
+      });
+    });
   }
 
-  private rejectPending(error: Error) {
-    this.pendingRpc.forEach((pending) => {
-      window.clearTimeout(pending.timer);
-      pending.reject(error);
-    });
-    this.pendingRpc.clear();
+  disconnect() {
+    this.approved = false;
+    if (this.socket) {
+      try {
+        this.socket.close();
+      } catch {}
+    }
+    this.socket = null;
+    this.rejectAllPending(new Error(copy('connection.error.closed')));
+  }
 
-    this.pendingTransfers.forEach((pending) => {
+  private rejectAllPending(error: Error) {
+    for (const pending of this.pendingRpc.values()) {
       window.clearTimeout(pending.timer);
       pending.reject(error);
-    });
+    }
+    this.pendingRpc.clear();
+    for (const transfer of this.pendingTransfers.values()) {
+      window.clearTimeout(transfer.timer);
+      transfer.reject(error);
+    }
     this.pendingTransfers.clear();
   }
 
-  private handleMessage(message: RelayMessage) {
-    if (message.type === 'relay.peer.left' && message.role === 'desktop') {
-      this.approved = false;
-      this.reconnectOnNextClose = true;
-      this.rejectPending(new Error(copy('connection.error.desktopOffline')));
-      this.emitPhase('connected', copy('connection.error.desktopOffline'));
-      this.socket?.close(4002, 'desktop offline');
-      return;
-    }
-    if (message.type === 'pair.approved') {
-      this.clearPairingTimer();
-      const payload = message.payload && typeof message.payload === 'object'
-        ? message.payload as Record<string, unknown>
-        : {};
-      const resumeToken = typeof payload.resumeToken === 'string' ? payload.resumeToken : '';
-      if (this.pairingCode) {
-        localStorage.setItem(SAVED_PAIRING_CODE_KEY, this.pairingCode);
-      }
-      if (resumeToken && this.pairingCode) {
-        localStorage.setItem(resumeTokenKey(this.pairingCode), resumeToken);
-      }
-      this.approved = true;
-      this.reconnecting = false;
-      this.reconnectOnNextClose = false;
-      this.reconnectAttempts = 0;
-      this.emitPhase('connected');
-      this.emitEvent(message);
-      return;
-    }
-    if (message.type === 'pair.rejected') {
-      this.manualDisconnect = true;
-      if (this.pairingCode) localStorage.removeItem(resumeTokenKey(this.pairingCode));
-      this.emitPhase('error', String(message.error || copy('connection.error.rejected')));
-      return;
-    }
-    if (message.type === 'session.revoked') {
-      this.manualDisconnect = true;
-      if (this.pairingCode) localStorage.removeItem(resumeTokenKey(this.pairingCode));
-      localStorage.removeItem(SAVED_PAIRING_CODE_KEY);
-      this.approved = false;
-      this.rejectPending(new Error(copy('connection.error.revoked')));
-      this.emitPhase('disconnected', copy('connection.error.revoked'));
-      this.socket?.close(4003, 'session revoked');
-      return;
-    }
-    if (message.type === 'rpc.response') {
-      const response = message as RpcResponse & RelayMessage;
-      const pending = response.id ? this.pendingRpc.get(response.id) : undefined;
-      if (!pending || !response.id) return;
-      window.clearTimeout(pending.timer);
-      this.pendingRpc.delete(response.id);
-      if (response.ok) {
-        dispatchBrowserEvent('nekogpt:rpc-response', { method: pending.method, result: response.result });
-        pending.resolve(response.result);
-      } else {
-        pending.reject(new Error(response.error || copy('connection.error.rpcFailed')));
-      }
-      return;
-    }
-    if (message.type === 'live2d.bundle.chunk') {
-      const transferId = String(message.transferId || '');
-      const pending = this.pendingTransfers.get(transferId);
-      if (!pending) return;
-      const index = Number(message.index);
-      if (!Number.isInteger(index) || index < 0 || index >= pending.metadata.totalChunks) return;
-      pending.chunks[index] = String(message.data || '');
-      if (pending.chunks.filter(Boolean).length !== pending.metadata.totalChunks) return;
-
-      window.clearTimeout(pending.timer);
-      this.pendingTransfers.delete(transferId);
-      try {
-        pending.resolve({
-          ...pending.metadata,
-          bytes: decodeBase64Chunks(pending.chunks, pending.metadata.byteLength),
-        });
-      } catch (error) {
-        pending.reject(error instanceof Error ? error : new Error(String(error)));
-      }
-      return;
-    }
-    this.emitEvent(message);
+  private send(payload: unknown) {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
+    this.socket.send(JSON.stringify(payload));
   }
 
-  private send(message: RelayMessage) {
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-      throw new Error(copy('connection.error.notConnected'));
+  private handleMessage(message: RelayMessage) {
+    if (!message || typeof message !== 'object') return;
+    if (message.type === 'rpc.response') {
+      const id = typeof message.id === 'string' ? message.id : '';
+      const pending = this.pendingRpc.get(id);
+      if (!pending) return;
+      window.clearTimeout(pending.timer);
+      this.pendingRpc.delete(id);
+      if (message.error) pending.reject(new Error(String(message.error)));
+      else pending.resolve(message.result);
+      return;
     }
-    this.socket.send(JSON.stringify(message));
+
+    if (message.type === 'live2d.bundle.meta') {
+      return;
+    }
+
+    if (message.type === 'live2d.bundle.chunk') {
+      const transferId = typeof message.transferId === 'string' ? message.transferId : '';
+      const transfer = this.pendingTransfers.get(transferId);
+      if (!transfer) return;
+      const index = Number(message.index);
+      if (!Number.isInteger(index) || index < 0 || index >= transfer.chunks.length) return;
+      transfer.chunks[index] = typeof message.data === 'string' ? message.data : '';
+      if (transfer.chunks.every((chunk) => typeof chunk === 'string' && chunk.length > 0)) {
+        window.clearTimeout(transfer.timer);
+        this.pendingTransfers.delete(transferId);
+        try {
+          transfer.resolve(decodeTransferredBundle(transfer.metadata, transfer.chunks));
+        } catch (error) {
+          transfer.reject(error instanceof Error ? error : new Error(copy('connection.error.bundleInvalid')));
+        }
+      }
+      return;
+    }
+
+    if (message.type === 'companion.snapshot') {
+      this.handlers.onSnapshot?.(message.snapshot as CompanionSnapshot);
+      return;
+    }
+
+    if (message.type === 'chat.history') {
+      this.handlers.onChatHistory?.(message.history as CompanionChatHistory);
+      return;
+    }
+
+    if (message.type === 'live2d.state') {
+      this.handlers.onLive2DState?.(message.state as CompanionLive2DState);
+      return;
+    }
+
+    if (message.type === 'tts.audio') {
+      const payload = message.audio as CompanionTtsAudio;
+      if (payload && typeof payload === 'object') {
+        const data = typeof payload.data === 'string' ? payload.data : '';
+        const mimeType = typeof payload.mimeType === 'string' ? payload.mimeType : 'audio/mpeg';
+        if (data) {
+          const blob = dataUrlToBlob(`data:${mimeType};base64,${data}`);
+          if (blob) this.handlers.onTtsAudio?.({ ...payload, blob });
+          else this.handlers.onTtsAudio?.(payload);
+        } else {
+          this.handlers.onTtsAudio?.(payload);
+        }
+      }
+      return;
+    }
+
+    this.handlers.onRelayMessage?.(message);
+  }
+
+  sendChatMessage(text: string, attachments?: unknown) {
+    this.send({ type: 'chat.send', text, ...(attachments ? { attachments } : {}) });
+  }
+
+  sendVisionImage(payload: unknown) {
+    this.send({ type: 'vision.image', image: payload });
+  }
+
+  sendVisionVideo(payload: unknown) {
+    this.send({ type: 'vision.video', video: payload });
+  }
+
+  sendMicrophoneState(payload: unknown) {
+    this.send({ type: 'microphone.state', ...((payload && typeof payload === 'object') ? payload : {}) });
+  }
+
+  sendTouch(payload: unknown) {
+    this.send({ type: 'live2d.touch', ...((payload && typeof payload === 'object') ? payload : {}) });
   }
 
   rpc<T>(method: string, params?: unknown, timeoutMs = RPC_TIMEOUT_MS) {
@@ -422,7 +349,7 @@ export class NekoConnection {
     return new Promise<Live2DBundle>((resolve, reject) => {
       const timer = window.setTimeout(() => {
         this.pendingTransfers.delete(metadata.transferId);
-        reject(new Error(copy('connection.error.bundleTimeout'));
+        reject(new Error(copy('connection.error.bundleTimeout')));
       }, BUNDLE_TIMEOUT_MS);
       this.pendingTransfers.set(metadata.transferId, {
         metadata,
