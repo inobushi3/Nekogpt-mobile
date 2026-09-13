@@ -1,4 +1,4 @@
-import 'https://nekogpt-mobile-k3u5c87it-inobushi3s-projects.vercel.app/assets/index-DoK11xDG.js';
+import 'https://nekogpt-mobile-9oyoosiyr-inobushi3s-projects.vercel.app/assets/index-DoK11xDG.js';
 
 const storedAttachments=new Map();
 let restoreQueued=false;
