@@ -1,0 +1,10 @@
+@import url("https://nekogpt-mobile-k3u5c87it-inobushi3s-projects.vercel.app/assets/index-qEzoBXWy.css");
+
+/* Media preview only: keep the approved chat and page styles untouched. */
+.floating-composer .media-preview-strip{background:transparent!important;border:0!important;box-shadow:none!important;}
+.floating-composer .media-preview-card{position:relative!important;display:block!important;width:64px!important;min-width:64px!important;max-width:64px!important;height:64px!important;min-height:64px!important;max-height:64px!important;padding:0!important;overflow:hidden!important;border:0!important;border-radius:14px!important;background:transparent!important;box-shadow:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;}
+.floating-composer .media-preview-card>img,.floating-composer .media-preview-card>video{display:block!important;width:100%!important;height:100%!important;max-height:none!important;border:0!important;border-radius:14px!important;background:transparent!important;object-fit:cover!important;}
+.floating-composer .media-preview-card>span{display:none!important;}
+.floating-composer .media-preview-card>button{position:absolute!important;top:4px!important;right:4px!important;width:22px!important;min-width:22px!important;height:22px!important;min-height:22px!important;padding:0!important;border:1px solid rgba(255,255,255,.24)!important;border-radius:999px!important;background:rgba(0,0,0,.58)!important;color:#fff!important;-webkit-backdrop-filter:blur(8px)!important;backdrop-filter:blur(8px)!important;}
+.floating-composer .media-preview-card>button svg{width:13px!important;height:13px!important;}
+.nekogpt-persisted-attachments{display:grid!important;}
