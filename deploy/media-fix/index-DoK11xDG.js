@@ -15,6 +15,27 @@ html body .companion-screen .settings-panel {
   overflow: hidden !important;
 }
 
+html body .companion-screen .settings-panel,
+html body .companion-screen .settings-panel * {
+  color: rgba(255, 255, 255, 0.96) !important;
+}
+
+html body .companion-screen .settings-panel p,
+html body .companion-screen .settings-panel small,
+html body .companion-screen .settings-panel label,
+html body .companion-screen .settings-panel span {
+  color: rgba(255, 255, 255, 0.90) !important;
+}
+
+html body .companion-screen .settings-panel h1,
+html body .companion-screen .settings-panel h2,
+html body .companion-screen .settings-panel h3,
+html body .companion-screen .settings-panel h4,
+html body .companion-screen .settings-panel strong,
+html body .companion-screen .settings-panel b {
+  color: #ffffff !important;
+}
+
 @media (max-width: 620px) {
   html body .companion-screen .settings-panel {
     border-radius: 17px !important;
