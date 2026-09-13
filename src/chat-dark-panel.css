@@ -1,0 +1,16 @@
+/* Chat-only visual override: keep the companion visible without blurring it. */
+.floating-chat::before {
+  top: -120px !important;
+  background: rgba(5, 5, 6, 0.64) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+}
+
+/* Keep the same taller chat cover on narrow and short mobile viewports. */
+@media (max-width: 620px), (max-height: 430px) {
+  .floating-chat::before {
+    top: -120px !important;
+  }
+}
