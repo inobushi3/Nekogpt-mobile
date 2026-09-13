@@ -9,7 +9,7 @@
 /* Taller mobile chat viewport: show more conversation without changing app logic. */
 @media (max-width: 620px) and (min-height: 621px) {
   .floating-messages {
-    height: clamp(210px, 28dvh, 250px) !important;
+    height: clamp(235px, 31dvh, 285px) !important;
     max-height: none !important;
   }
 }
