@@ -1,5 +1,6 @@
-/* Keep the bundled night scene as the default background, but let a user-uploaded
-   background take over whenever App.tsx adds .has-mobile-background. */
+/* Keep the bundled night scene as the default background.
+   A user-uploaded background is rendered inside the Live2D stage so it cannot
+   disappear when the PIXI canvas finishes initializing. */
 .companion-screen {
   background-image: url('/night-scene-static.webp') !important;
   background-position: center center !important;
@@ -8,13 +9,8 @@
   background-color: #000 !important;
 }
 
-/* Use the uploaded image directly on the screen instead of a pseudo-element.
-   This keeps it visible after Live2D finishes initializing. */
 .companion-screen.has-mobile-background {
-  background-image: var(--mobile-background-image) !important;
-  background-position: center center !important;
-  background-size: cover !important;
-  background-repeat: no-repeat !important;
+  background-image: none !important;
   background-color: #000 !important;
 }
 
@@ -28,7 +24,27 @@
   background: transparent !important;
 }
 
+/* The custom-property lives on .companion-screen and is inherited by the stage.
+   Keep the uploaded image in the same stacking context as the Live2D canvas. */
+.companion-screen.has-mobile-background .live2d-stage {
+  isolation: isolate;
+}
+
+.companion-screen.has-mobile-background .live2d-stage::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background-image: var(--mobile-background-image) !important;
+  background-position: center center !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  content: '';
+  pointer-events: none;
+}
+
 .live2d-stage canvas {
+  position: relative;
+  z-index: 1;
   background: transparent !important;
 }
 
@@ -37,7 +53,5 @@
 }
 
 .companion-screen.has-mobile-background::after {
-  background:
-    radial-gradient(circle at 50% 46%, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.52) 78%),
-    linear-gradient(180deg, rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.56)) !important;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.14)) !important;
 }
