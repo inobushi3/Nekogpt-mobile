@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 const lockedFiles = {
   'src/components/ConnectionGate.tsx': 'f37f71829e451d8b73833043863f0d280a11d71a',
   'src/connection-background.ts': 'e1ffe324b1f2df2e07f49e3b13cf9cb8a418584b',
-  'src/background-static.css': '0f5307a8d44242872b882137149497be57d8525d',
+  'src/background-static.css': 'f83119db05922453ba9eef6e9df48377d6258f85',
   'src/connection-gate-polish.css': '75c839e3942f7f08ccfe5fb851e0ce53bbe944bd',
   'src/connection-code-strip.css': 'c8b714e33d93c3c6ec570e223f83385170c1ca86',
   'src/connection-status-hide.css': '3df3a653bbf6c4b59c8cc1cd6132ec1c71ce4687',
