@@ -36,12 +36,10 @@ html body .companion-screen .settings-panel b {
   color: #ffffff !important;
 }
 
-/* Remove the two live status dots without touching the section content. */
 html body .companion-screen .settings-panel .settings-panel__header > i {
   display: none !important;
 }
 
-/* Hide only the background status text (e.g. "Imagem ativa" / "Preto padrão"). */
 html body .companion-screen .settings-panel .settings-section:nth-of-type(2) .settings-panel__header span {
   display: none !important;
 }
@@ -76,28 +74,48 @@ html body .companion-screen .settings-panel .camera-controls button.is-active {
   box-shadow: none !important;
 }
 
-/* Error messages: text only, no pill/card chrome. */
-html body .companion-screen .companion-status.nekogpt-error-status {
+/* All top notifications are text-only. */
+html body .companion-screen .notice,
+html body .companion-screen .companion-status {
+  width: auto !important;
+  max-width: calc(100vw - 48px) !important;
+  min-height: 0 !important;
   gap: 0 !important;
   border: 0 !important;
+  outline: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
   background-image: none !important;
   box-shadow: none !important;
-  color: #ff4f6d !important;
   padding: 0 !important;
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
+  filter: none !important;
   text-shadow: none !important;
+  text-align: center !important;
+  font-weight: 700 !important;
 }
 
-html body .companion-screen .companion-status.nekogpt-error-status .status-orb {
+html body .companion-screen .notice {
+  color: #ff4f6d !important;
+}
+
+html body .companion-screen .companion-status {
+  color: rgba(255, 255, 255, 0.96) !important;
+}
+
+html body .companion-screen .companion-status .status-orb {
   display: none !important;
 }
 
+html body .companion-screen .companion-status span {
+  color: inherit !important;
+  text-shadow: none !important;
+}
+
+html body .companion-screen .companion-status.nekogpt-error-status,
 html body .companion-screen .companion-status.nekogpt-error-status span {
   color: #ff4f6d !important;
-  text-shadow: none !important;
 }
 
 @media (max-width: 620px) {
@@ -124,6 +142,137 @@ const backgroundDescriptionByLanguage = {
   ru: 'Выберите изображение для фона.',
 };
 
+const notificationTranslations = {
+  'pt-BR': {
+    permissionDismissed: 'Permissão cancelada.',
+    permissionDenied: 'Permissão negada.',
+    bundleTimeout: 'O download do modelo Live2D excedeu o tempo limite.',
+    timeout: 'A operação excedeu o tempo limite.',
+    connectionClosed: 'A conexão com o NekoGPT foi encerrada.',
+    desktopOffline: 'O NekoGPT no PC ficou offline.',
+    relayUnreachable: 'Não foi possível alcançar o relay.',
+    rejected: 'O pareamento foi recusado no PC.',
+    revoked: 'A conexão móvel foi desligada no NekoGPT do PC.',
+    notApproved: 'A conexão com o NekoGPT ainda não foi concluída.',
+    commandFailed: 'O PC não conseguiu executar o comando.',
+    invalidProtocol: 'Mensagem inválida recebida do relay.',
+    incompleteBundle: 'O pacote Live2D chegou incompleto.',
+    genericError: 'Ocorreu um erro.',
+  },
+  en: {
+    permissionDismissed: 'Permission dismissed.',
+    permissionDenied: 'Permission denied.',
+    bundleTimeout: 'The Live2D model download timed out.',
+    timeout: 'The operation timed out.',
+    connectionClosed: 'The connection with NekoGPT was closed.',
+    desktopOffline: 'NekoGPT on the PC went offline.',
+    relayUnreachable: 'Could not reach the relay.',
+    rejected: 'Pairing was rejected on the PC.',
+    revoked: 'The mobile connection was disabled on the NekoGPT PC app.',
+    notApproved: 'The NekoGPT connection has not been completed yet.',
+    commandFailed: 'The PC could not execute the command.',
+    invalidProtocol: 'Invalid message received from the relay.',
+    incompleteBundle: 'The Live2D package arrived incomplete.',
+    genericError: 'An error occurred.',
+  },
+  es: {
+    permissionDismissed: 'Permiso cancelado.',
+    permissionDenied: 'Permiso denegado.',
+    bundleTimeout: 'La descarga del modelo Live2D superó el tiempo de espera.',
+    timeout: 'La operación superó el tiempo de espera.',
+    connectionClosed: 'La conexión con NekoGPT se cerró.',
+    desktopOffline: 'NekoGPT en el PC quedó sin conexión.',
+    relayUnreachable: 'No se pudo alcanzar el relay.',
+    rejected: 'El emparejamiento fue rechazado en el PC.',
+    revoked: 'La conexión móvil fue desactivada en NekoGPT del PC.',
+    notApproved: 'La conexión con NekoGPT aún no se ha completado.',
+    commandFailed: 'El PC no pudo ejecutar el comando.',
+    invalidProtocol: 'Se recibió un mensaje no válido del relay.',
+    incompleteBundle: 'El paquete Live2D llegó incompleto.',
+    genericError: 'Ocurrió un error.',
+  },
+  fr: {
+    permissionDismissed: 'Autorisation annulée.',
+    permissionDenied: 'Autorisation refusée.',
+    bundleTimeout: 'Le téléchargement du modèle Live2D a dépassé le délai.',
+    timeout: 'L’opération a dépassé le délai.',
+    connectionClosed: 'La connexion avec NekoGPT a été fermée.',
+    desktopOffline: 'NekoGPT sur le PC est hors ligne.',
+    relayUnreachable: 'Impossible de joindre le relay.',
+    rejected: 'L’appairage a été refusé sur le PC.',
+    revoked: 'La connexion mobile a été désactivée sur NekoGPT du PC.',
+    notApproved: 'La connexion à NekoGPT n’est pas encore terminée.',
+    commandFailed: 'Le PC n’a pas pu exécuter la commande.',
+    invalidProtocol: 'Message invalide reçu du relay.',
+    incompleteBundle: 'Le paquet Live2D est arrivé incomplet.',
+    genericError: 'Une erreur s’est produite.',
+  },
+  it: {
+    permissionDismissed: 'Autorizzazione annullata.',
+    permissionDenied: 'Autorizzazione negata.',
+    bundleTimeout: 'Il download del modello Live2D ha superato il tempo limite.',
+    timeout: 'L’operazione ha superato il tempo limite.',
+    connectionClosed: 'La connessione con NekoGPT è stata chiusa.',
+    desktopOffline: 'NekoGPT sul PC è offline.',
+    relayUnreachable: 'Impossibile raggiungere il relay.',
+    rejected: 'L’associazione è stata rifiutata sul PC.',
+    revoked: 'La connessione mobile è stata disattivata su NekoGPT del PC.',
+    notApproved: 'La connessione a NekoGPT non è ancora stata completata.',
+    commandFailed: 'Il PC non è riuscito a eseguire il comando.',
+    invalidProtocol: 'Messaggio non valido ricevuto dal relay.',
+    incompleteBundle: 'Il pacchetto Live2D è arrivato incompleto.',
+    genericError: 'Si è verificato un errore.',
+  },
+  ja: {
+    permissionDismissed: '権限リクエストがキャンセルされました。',
+    permissionDenied: '権限が拒否されました。',
+    bundleTimeout: 'Live2Dモデルのダウンロードがタイムアウトしました。',
+    timeout: '処理がタイムアウトしました。',
+    connectionClosed: 'NekoGPTとの接続が終了しました。',
+    desktopOffline: 'PC側のNekoGPTがオフラインになりました。',
+    relayUnreachable: 'リレーに接続できませんでした。',
+    rejected: 'PC側でペアリングが拒否されました。',
+    revoked: 'PC側のNekoGPTでモバイル接続が無効になりました。',
+    notApproved: 'NekoGPTとの接続はまだ完了していません。',
+    commandFailed: 'PCでコマンドを実行できませんでした。',
+    invalidProtocol: 'リレーから無効なメッセージを受信しました。',
+    incompleteBundle: 'Live2Dパッケージが不完全です。',
+    genericError: 'エラーが発生しました。',
+  },
+  'zh-CN': {
+    permissionDismissed: '权限请求已取消。',
+    permissionDenied: '权限被拒绝。',
+    bundleTimeout: 'Live2D 模型下载超时。',
+    timeout: '操作超时。',
+    connectionClosed: '与 NekoGPT 的连接已关闭。',
+    desktopOffline: 'PC 上的 NekoGPT 已离线。',
+    relayUnreachable: '无法连接到中继。',
+    rejected: 'PC 端拒绝了配对。',
+    revoked: 'PC 端 NekoGPT 已关闭移动连接。',
+    notApproved: '与 NekoGPT 的连接尚未完成。',
+    commandFailed: 'PC 无法执行该命令。',
+    invalidProtocol: '从中继收到了无效消息。',
+    incompleteBundle: 'Live2D 包不完整。',
+    genericError: '发生错误。',
+  },
+  ru: {
+    permissionDismissed: 'Запрос разрешения отменён.',
+    permissionDenied: 'Доступ запрещён.',
+    bundleTimeout: 'Время загрузки модели Live2D истекло.',
+    timeout: 'Время выполнения операции истекло.',
+    connectionClosed: 'Соединение с NekoGPT закрыто.',
+    desktopOffline: 'NekoGPT на ПК перешёл в офлайн.',
+    relayUnreachable: 'Не удалось подключиться к relay.',
+    rejected: 'Сопряжение было отклонено на ПК.',
+    revoked: 'Мобильное подключение отключено в NekoGPT на ПК.',
+    notApproved: 'Подключение к NekoGPT ещё не завершено.',
+    commandFailed: 'ПК не смог выполнить команду.',
+    invalidProtocol: 'От relay получено недопустимое сообщение.',
+    incompleteBundle: 'Пакет Live2D получен не полностью.',
+    genericError: 'Произошла ошибка.',
+  },
+};
+
 function normalizeAppLanguage(value) {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return null;
@@ -139,7 +288,6 @@ function getCurrentAppLanguage() {
     const saved = normalizeAppLanguage(localStorage.getItem('nekogpt:language'));
     if (saved) return saved;
   } catch {}
-
   const preferred = [navigator.language, ...(navigator.languages || [])];
   for (const value of preferred) {
     const normalized = normalizeAppLanguage(value);
@@ -158,18 +306,68 @@ function updateBackgroundDescription() {
   if (description.textContent !== text) description.textContent = text;
 }
 
-const errorStatusPattern = /erro|error|failed|falhou|failure|timeout|timed out|tempo limite|tempo-limite|excedeu|unable|could not|n[aã]o foi poss[ií]vel|denied|negad|imposs[ií]vel|fall[oó]|tiempo de espera|[eé]chec|d[eé]lai|impossible|errore|impossibile|エラー|失敗|タイムアウト|错误|失敗|失败|超时|ошиб|не удалось|тайм-аут/i;
+const errorStatusPattern = /permission|dismissed|denied|erro|error|failed|falhou|failure|timeout|timed out|tempo limite|tempo-limite|excedeu|unable|could not|n[aã]o foi poss[ií]vel|negad|imposs[ií]vel|fall[oó]|tiempo de espera|[eé]chec|d[eé]lai|impossible|errore|impossibile|エラー|失敗|タイムアウト|错误|失败|超时|ошиб|не удалось|тайм-аут/i;
+const rawForeignErrorPattern = /permission|dismissed|denied|error|failed|failure|timeout|timed out|unable|could not|not connected|not approved|closed|unreachable|invalid|offline|n[aã]o foi poss[ií]vel|falhou|erro|excedeu|negad|encerrad|recusad|desligad|incompleto/i;
 
-function updateCompanionErrorStatus() {
+function classifyRawNotification(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return null;
+  if (/permission\s+dismissed/i.test(text)) return 'permissionDismissed';
+  if (/permission\s+denied|notallowederror|permission.*blocked/i.test(text)) return 'permissionDenied';
+  if (/live2d(?:\.bundle|\s+model|\s+modelo)?.*(timeout|timed out|tempo limite|excedeu|超时|тайм)/i.test(text)) return 'bundleTimeout';
+  if (/desktop.*offline|pc.*offline|ficou offline/i.test(text)) return 'desktopOffline';
+  if (/could not reach.*relay|unreachable.*relay|alcançar o relay|alcanzar el relay|joindre le relay|raggiungere il relay/i.test(text)) return 'relayUnreachable';
+  if (/not approved|ainda n[aã]o foi conclu[ií]da|not.*completed yet/i.test(text)) return 'notApproved';
+  if (/pairing.*rejected|pareamento.*recusado|emparejamiento.*rechazado|appairage.*refus/i.test(text)) return 'rejected';
+  if (/revoked|mobile connection.*disabled|conex[aã]o m[oó]vel.*desligada/i.test(text)) return 'revoked';
+  if (/rpc.*failed|command.*failed|could not execute.*command|n[aã]o conseguiu executar o comando/i.test(text)) return 'commandFailed';
+  if (/invalid.*message|invalid.*protocol|mensagem inv[aá]lida/i.test(text)) return 'invalidProtocol';
+  if (/incomplete.*live2d|live2d.*incomplete|pacote live2d.*incompleto/i.test(text)) return 'incompleteBundle';
+  if (/connection.*closed|connection.*ended|conex[aã]o.*encerrada|conex[aã]o encerrada/i.test(text)) return 'connectionClosed';
+  if (/timeout|timed out|tempo limite|tempo-limite|excedeu|tiempo de espera|d[eé]lai|タイムアウト|超时|тайм-аут/i.test(text)) return 'timeout';
+  return null;
+}
+
+function localizeNotification(raw, language) {
+  const dictionary = notificationTranslations[language] || notificationTranslations['pt-BR'];
+  const key = classifyRawNotification(raw);
+  if (key && dictionary[key]) return dictionary[key];
+  if (language !== 'en' && rawForeignErrorPattern.test(raw)) return dictionary.genericError;
+  if (language === 'en' && /n[aã]o foi poss[ií]vel|falhou|erro|excedeu|negad|encerrad|recusad|desligad|incompleto/i.test(raw)) return dictionary.genericError;
+  return raw;
+}
+
+function translateNotificationNode(node, language) {
+  if (!(node instanceof HTMLElement)) return { raw: '', translated: '' };
+  const current = (node.textContent || '').trim();
+  const previousTranslated = node.dataset.nekogptTranslatedText || '';
+  if (!node.dataset.nekogptOriginalText || current !== previousTranslated) {
+    node.dataset.nekogptOriginalText = current;
+  }
+  const raw = node.dataset.nekogptOriginalText || current;
+  const translated = localizeNotification(raw, language);
+  if (translated && current !== translated) node.textContent = translated;
+  node.dataset.nekogptTranslatedText = translated;
+  return { raw, translated };
+}
+
+function updateNotificationUi() {
+  const language = getCurrentAppLanguage();
+
+  document.querySelectorAll('.companion-screen .notice').forEach((notice) => {
+    translateNotificationNode(notice, language);
+  });
+
   document.querySelectorAll('.companion-screen .companion-status').forEach((status) => {
-    const text = (status.textContent || '').trim();
-    status.classList.toggle('nekogpt-error-status', errorStatusPattern.test(text));
+    const textNode = status.querySelector('span:not(.status-orb)') || status;
+    const { raw, translated } = translateNotificationNode(textNode, language);
+    const source = `${raw} ${translated}`;
+    status.classList.toggle('nekogpt-error-status', errorStatusPattern.test(source));
   });
 }
 
 let pendingMediaSend = null;
 let clearTimer = null;
-
 const sentMediaSelector = '.app-message-line--user .app-message-attachments img, .app-message-line--user .app-message-attachments video';
 
 function getComposer() {
@@ -183,49 +381,33 @@ function composerHasMediaPreview() {
 
 function armMediaPreviewClear() {
   if (!composerHasMediaPreview()) return;
-
   const knownMedia = new WeakSet(document.querySelectorAll(sentMediaSelector));
-  pendingMediaSend = {
-    knownMedia,
-    expiresAt: Date.now() + 15000,
-  };
+  pendingMediaSend = { knownMedia, expiresAt: Date.now() + 15000 };
 }
 
 function clearComposerPreview() {
   const composer = getComposer();
   if (!composer) return;
-
   const preview = composer.querySelector('.media-preview-card');
   if (!preview) return;
-
   const removeButton = preview.querySelector('button');
-  if (removeButton) {
-    removeButton.click();
-  } else {
-    preview.remove();
-  }
-
+  if (removeButton) removeButton.click();
+  else preview.remove();
   composer.querySelectorAll('input[type="file"]').forEach((input) => {
-    try {
-      input.value = '';
-    } catch {}
+    try { input.value = ''; } catch {}
   });
 }
 
 function tryClearPreviewAfterSuccessfulSend() {
   if (!pendingMediaSend) return;
-
   if (Date.now() > pendingMediaSend.expiresAt) {
     pendingMediaSend = null;
     return;
   }
-
   const hasNewSentMedia = Array.from(document.querySelectorAll(sentMediaSelector)).some(
     (media) => !pendingMediaSend.knownMedia.has(media),
   );
-
   if (!hasNewSentMedia) return;
-
   pendingMediaSend = null;
   if (clearTimer) window.clearTimeout(clearTimer);
   clearTimer = window.setTimeout(() => {
@@ -234,37 +416,29 @@ function tryClearPreviewAfterSuccessfulSend() {
   }, 60);
 }
 
-document.addEventListener(
-  'click',
-  (event) => {
-    const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest('.floating-composer .send-paw-button')) {
-      armMediaPreviewClear();
-    }
-  },
-  true,
-);
+document.addEventListener('click', (event) => {
+  const target = event.target instanceof Element ? event.target : null;
+  if (target?.closest('.floating-composer .send-paw-button')) armMediaPreviewClear();
+}, true);
 
-document.addEventListener(
-  'keydown',
-  (event) => {
-    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
-    const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest('.floating-composer')) {
-      armMediaPreviewClear();
-    }
-  },
-  true,
-);
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+  const target = event.target instanceof Element ? event.target : null;
+  if (target?.closest('.floating-composer')) armMediaPreviewClear();
+}, true);
 
-document.addEventListener(
-  'change',
-  () => window.setTimeout(updateBackgroundDescription, 0),
-  true,
-);
+document.addEventListener('change', () => {
+  window.setTimeout(() => {
+    updateBackgroundDescription();
+    updateNotificationUi();
+  }, 0);
+}, true);
 
 window.addEventListener('storage', (event) => {
-  if (event.key === 'nekogpt:language') updateBackgroundDescription();
+  if (event.key === 'nekogpt:language') {
+    updateBackgroundDescription();
+    updateNotificationUi();
+  }
 });
 
 const root = document.getElementById('root');
@@ -272,7 +446,7 @@ if (root) {
   new MutationObserver(() => {
     tryClearPreviewAfterSuccessfulSend();
     updateBackgroundDescription();
-    updateCompanionErrorStatus();
+    updateNotificationUi();
   }).observe(root, {
     childList: true,
     subtree: true,
@@ -281,4 +455,4 @@ if (root) {
 }
 
 updateBackgroundDescription();
-updateCompanionErrorStatus();
+updateNotificationUi();
