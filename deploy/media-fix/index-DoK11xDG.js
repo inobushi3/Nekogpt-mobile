@@ -1,0 +1,12 @@
+import 'https://nekogpt-mobile-k3u5c87it-inobushi3s-projects.vercel.app/assets/index-DoK11xDG.js';
+
+const storedAttachments=new Map();
+let restoreQueued=false;
+const getUserLines=()=>Array.from(document.querySelectorAll('.app-message-line--user'));
+const getMessageContent=(line)=>line.querySelector('.app-message-content')?.textContent?.trim()||'';
+function getOccurrenceFromEnd(lines,index,content){let occurrence=0;for(let cursor=lines.length-1;cursor>index;cursor-=1){if(getMessageContent(lines[cursor])===content)occurrence+=1;}return occurrence;}
+function captureAttachments(){const lines=getUserLines();lines.forEach((line,index)=>{const content=getMessageContent(line);if(!content)return;const media=line.querySelector('.app-message-attachments img, .app-message-attachments video');if(!media?.src||media.closest('.nekogpt-persisted-attachments'))return;const occurrenceFromEnd=getOccurrenceFromEnd(lines,index,content);const kind=media.tagName==='VIDEO'?'video':'image';const key=`${content}\u0000${occurrenceFromEnd}`;storedAttachments.set(key,{key,content,occurrenceFromEnd,kind,src:media.src});});}
+function findTargetLine(item){const matches=getUserLines().filter((line)=>getMessageContent(line)===item.content);return matches[matches.length-1-item.occurrenceFromEnd]||null;}
+function restoreAttachments(){restoreQueued=false;captureAttachments();for(const item of storedAttachments.values()){const line=findTargetLine(item);if(!line||line.querySelector('.app-message-attachments'))continue;const bubble=line.querySelector('.app-message-bubble--user');if(!bubble)continue;const wrapper=document.createElement('span');wrapper.className='app-message-attachments nekogpt-persisted-attachments';const attachment=document.createElement('span');attachment.className='app-message-attachment';if(item.kind==='video'){const video=document.createElement('video');video.src=item.src;video.muted=true;video.playsInline=true;video.controls=true;video.preload='metadata';attachment.appendChild(video);}else{const image=document.createElement('img');image.src=item.src;image.alt='';attachment.appendChild(image);}wrapper.appendChild(attachment);bubble.appendChild(wrapper);}}
+function queueRestore(){if(restoreQueued)return;restoreQueued=true;requestAnimationFrame(restoreAttachments);}
+const root=document.getElementById('root');if(root){new MutationObserver(queueRestore).observe(root,{childList:true,subtree:true});queueRestore();}
