@@ -79,6 +79,51 @@ html body .companion-screen .settings-panel .camera-controls button.is-active {
 `;
 document.head.appendChild(settingsGlassStyle);
 
+const backgroundDescriptionByLanguage = {
+  'pt-BR': 'Escolha uma imagem para o fundo.',
+  en: 'Choose an image for the background.',
+  es: 'Elige una imagen para el fondo.',
+  fr: 'Choisissez une image pour l’arrière-plan.',
+  it: 'Scegli un’immagine per lo sfondo.',
+  ja: '背景用の画像を選択してください。',
+  'zh-CN': '选择一张图片作为背景。',
+  ru: 'Выберите изображение для фона.',
+};
+
+function normalizeAppLanguage(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return null;
+  if (raw === 'pt' || raw === 'pt-br') return 'pt-BR';
+  if (raw === 'zh' || raw === 'zh-cn' || raw === 'zh-hans') return 'zh-CN';
+  const base = raw.split('-')[0];
+  if (base === 'en' || base === 'es' || base === 'fr' || base === 'it' || base === 'ja' || base === 'ru') return base;
+  return null;
+}
+
+function getCurrentAppLanguage() {
+  try {
+    const saved = normalizeAppLanguage(localStorage.getItem('nekogpt:language'));
+    if (saved) return saved;
+  } catch {}
+
+  const preferred = [navigator.language, ...(navigator.languages || [])];
+  for (const value of preferred) {
+    const normalized = normalizeAppLanguage(value);
+    if (normalized) return normalized;
+  }
+  return 'pt-BR';
+}
+
+function updateBackgroundDescription() {
+  const controls = document.querySelector('.companion-screen .settings-panel .background-controls');
+  const section = controls?.closest('.settings-section');
+  const description = section?.querySelector('p');
+  if (!description) return;
+  const language = getCurrentAppLanguage();
+  const text = backgroundDescriptionByLanguage[language] || backgroundDescriptionByLanguage['pt-BR'];
+  if (description.textContent !== text) description.textContent = text;
+}
+
 let pendingMediaSend = null;
 let clearTimer = null;
 
@@ -169,10 +214,25 @@ document.addEventListener(
   true,
 );
 
+document.addEventListener(
+  'change',
+  () => window.setTimeout(updateBackgroundDescription, 0),
+  true,
+);
+
+window.addEventListener('storage', (event) => {
+  if (event.key === 'nekogpt:language') updateBackgroundDescription();
+});
+
 const root = document.getElementById('root');
 if (root) {
-  new MutationObserver(tryClearPreviewAfterSuccessfulSend).observe(root, {
+  new MutationObserver(() => {
+    tryClearPreviewAfterSuccessfulSend();
+    updateBackgroundDescription();
+  }).observe(root, {
     childList: true,
     subtree: true,
   });
 }
+
+updateBackgroundDescription();
