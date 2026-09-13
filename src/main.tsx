@@ -5,6 +5,7 @@ import { installDialogueEffects } from './dialogue-effects';
 import { installDialogueWindow } from './dialogue-window';
 import { installLive2DDragSmoothing } from './live2d-drag-smoothing';
 import { installLive2DModelSync } from './live2d-model-sync';
+import { installMediaAttachmentPersistence } from './media-attachment-persistence';
 import { installMobileHistoryPull } from './mobile-history-pull';
 import { installMobileHud } from './mobile-hud';
 import './styles.css';
@@ -26,6 +27,7 @@ import './connection-settings-round.css';
 import './connection-options-panel.css';
 import './connection-card-transparent.css';
 import './companion-control-glass.css';
+import './media-preview-clean.css';
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   const reloadKey = 'nekogpt:sw-v6-controller-reload';
@@ -55,6 +57,7 @@ installLive2DDragSmoothing();
 installLive2DModelSync();
 installMobileHud();
 installMobileHistoryPull();
+installMediaAttachmentPersistence();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
