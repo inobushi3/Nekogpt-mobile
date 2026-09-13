@@ -1,6 +1,6 @@
-/* Static night-scene background from the user's uploaded Night Scene Static image. */
-.companion-screen,
-.companion-screen.has-mobile-background {
+/* Keep the bundled night scene as the default background, but let a user-uploaded
+   background take over whenever App.tsx adds .has-mobile-background. */
+.companion-screen {
   background-image: url('/night-scene-static.webp') !important;
   background-position: center center !important;
   background-size: cover !important;
@@ -8,10 +8,22 @@
   background-color: #000 !important;
 }
 
-.companion-screen::before,
-.companion-screen.has-mobile-background::before {
+.companion-screen.has-mobile-background {
+  background-image: none !important;
+  background-color: #000 !important;
+}
+
+.companion-screen::before {
   background: none !important;
   opacity: 0 !important;
+}
+
+.companion-screen.has-mobile-background::before {
+  background-image: var(--mobile-background-image) !important;
+  background-position: center center !important;
+  background-size: cover !important;
+  background-repeat: no-repeat !important;
+  opacity: 0.72 !important;
 }
 
 .live2d-stage {
@@ -22,7 +34,12 @@
   background: transparent !important;
 }
 
-.companion-screen::after,
-.companion-screen.has-mobile-background::after {
+.companion-screen::after {
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.01), rgba(0, 0, 0, 0.08)) !important;
+}
+
+.companion-screen.has-mobile-background::after {
+  background:
+    radial-gradient(circle at 50% 46%, rgba(0, 0, 0, 0.05), rgba(0, 0, 0, 0.66) 72%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.26), rgba(0, 0, 0, 0.74)) !important;
 }
