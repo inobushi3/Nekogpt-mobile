@@ -1,0 +1,4 @@
+/* Companion chat only: replace the warm-brown input outline with a soft cream line. */
+.companion-screen .floating-composer .composer-field {
+  border-color: rgba(243, 231, 208, 0.82) !important;
+}
