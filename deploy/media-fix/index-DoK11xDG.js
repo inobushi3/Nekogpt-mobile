@@ -76,6 +76,30 @@ html body .companion-screen .settings-panel .camera-controls button.is-active {
   box-shadow: none !important;
 }
 
+/* Error messages: text only, no pill/card chrome. */
+html body .companion-screen .companion-status.nekogpt-error-status {
+  gap: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: #ff4f6d !important;
+  padding: 0 !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  text-shadow: none !important;
+}
+
+html body .companion-screen .companion-status.nekogpt-error-status .status-orb {
+  display: none !important;
+}
+
+html body .companion-screen .companion-status.nekogpt-error-status span {
+  color: #ff4f6d !important;
+  text-shadow: none !important;
+}
+
 @media (max-width: 620px) {
   html body .companion-screen .settings-panel {
     border-radius: 17px !important;
@@ -132,6 +156,15 @@ function updateBackgroundDescription() {
   const language = getCurrentAppLanguage();
   const text = backgroundDescriptionByLanguage[language] || backgroundDescriptionByLanguage['pt-BR'];
   if (description.textContent !== text) description.textContent = text;
+}
+
+const errorStatusPattern = /erro|error|failed|falhou|failure|timeout|timed out|tempo limite|tempo-limite|excedeu|unable|could not|n[aã]o foi poss[ií]vel|denied|negad|imposs[ií]vel|fall[oó]|tiempo de espera|[eé]chec|d[eé]lai|impossible|errore|impossibile|エラー|失敗|タイムアウト|错误|失敗|失败|超时|ошиб|не удалось|тайм-аут/i;
+
+function updateCompanionErrorStatus() {
+  document.querySelectorAll('.companion-screen .companion-status').forEach((status) => {
+    const text = (status.textContent || '').trim();
+    status.classList.toggle('nekogpt-error-status', errorStatusPattern.test(text));
+  });
 }
 
 let pendingMediaSend = null;
@@ -239,10 +272,13 @@ if (root) {
   new MutationObserver(() => {
     tryClearPreviewAfterSuccessfulSend();
     updateBackgroundDescription();
+    updateCompanionErrorStatus();
   }).observe(root, {
     childList: true,
     subtree: true,
+    characterData: true,
   });
 }
 
 updateBackgroundDescription();
+updateCompanionErrorStatus();
