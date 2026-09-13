@@ -77,47 +77,81 @@
   height: 13px !important;
 }
 
-/* Sent media messages: show only the image/video, with no message card, label or filename. */
-.app-message-bubble--user:has(.app-message-attachments) {
-  padding: 0 !important;
+/* Sent media messages: only the actual image/video remains visible. */
+.app-message-line--user:has(.app-message-attachments),
+.app-message-line--user:has(.app-message-attachments) .app-message-bubble,
+.app-message-line--user:has(.app-message-attachments) .app-message-bubble--user,
+.app-message-line--user:has(.app-message-attachments) .app-message-body,
+.app-message-line--user:has(.app-message-attachments) .app-message-attachments,
+.app-message-line--user:has(.app-message-attachments) .app-message-attachment {
   background: transparent !important;
+  background-image: none !important;
   border: 0 !important;
-  border-radius: 0 !important;
+  outline: 0 !important;
   box-shadow: none !important;
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
+  filter: none !important;
 }
 
-.app-message-bubble--user:has(.app-message-attachments) > .app-message-content {
-  display: none !important;
-}
-
-.app-message-bubble--user:has(.app-message-attachments) .app-message-attachments,
-.app-message-bubble--user:has(.app-message-attachments) .app-message-attachment {
+.app-message-line--user:has(.app-message-attachments) .app-message-bubble,
+.app-message-line--user:has(.app-message-attachments) .app-message-bubble--user,
+.app-message-line--user:has(.app-message-attachments) .app-message-body,
+.app-message-line--user:has(.app-message-attachments) .app-message-attachments,
+.app-message-line--user:has(.app-message-attachments) .app-message-attachment {
   margin: 0 !important;
   padding: 0 !important;
   gap: 0 !important;
-  background: transparent !important;
-  border: 0 !important;
   border-radius: 0 !important;
-  box-shadow: none !important;
-  -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
 }
 
-.app-message-bubble--user:has(.app-message-attachments) .app-message-attachment > :not(img):not(video) {
+.app-message-line--user:has(.app-message-attachments) .app-message-bubble::before,
+.app-message-line--user:has(.app-message-attachments) .app-message-bubble::after,
+.app-message-line--user:has(.app-message-attachments) .app-message-bubble--user::before,
+.app-message-line--user:has(.app-message-attachments) .app-message-bubble--user::after,
+.app-message-line--user:has(.app-message-attachments) .app-message-attachments::before,
+.app-message-line--user:has(.app-message-attachments) .app-message-attachments::after,
+.app-message-line--user:has(.app-message-attachments) .app-message-attachment::before,
+.app-message-line--user:has(.app-message-attachments) .app-message-attachment::after {
+  content: none !important;
   display: none !important;
 }
 
-.app-message-bubble--user:has(.app-message-attachments) .app-message-attachment img,
-.app-message-bubble--user:has(.app-message-attachments) .app-message-attachment video {
+/* Strip card chrome from any extra nested wrapper around sent media. */
+.app-message-line--user:has(.app-message-attachments) .app-message-attachments *:not(img):not(video) {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  filter: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Hide labels, filenames and other leaf chrome, while preserving wrappers that contain the media. */
+.app-message-line--user:has(.app-message-attachments) .app-message-content,
+.app-message-line--user:has(.app-message-attachments) .app-message-attachments :not(:has(img)):not(:has(video)):not(img):not(video) {
+  display: none !important;
+}
+
+.app-message-line--user:has(.app-message-attachments) .app-message-attachment img,
+.app-message-line--user:has(.app-message-attachments) .app-message-attachment video,
+.app-message-line--user:has(.app-message-attachments) .app-message-attachments img,
+.app-message-line--user:has(.app-message-attachments) .app-message-attachments video {
   display: block !important;
   margin: 0 !important;
   padding: 0 !important;
+  width: auto !important;
   max-width: min(240px, 70vw) !important;
   height: auto !important;
   background: transparent !important;
+  background-image: none !important;
   border: 0 !important;
+  outline: 0 !important;
   border-radius: 12px !important;
   box-shadow: none !important;
+  filter: none !important;
 }
