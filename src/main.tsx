@@ -28,7 +28,6 @@ import './connection-options-panel.css';
 import './connection-card-transparent.css';
 import './companion-control-glass.css';
 import './media-preview-clean.css';
-import './chat-dark-panel.css';
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   const reloadKey = 'nekogpt:sw-v6-controller-reload';
