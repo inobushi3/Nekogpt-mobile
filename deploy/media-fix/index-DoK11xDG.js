@@ -36,6 +36,25 @@ html body .companion-screen .settings-panel b {
   color: #ffffff !important;
 }
 
+html body .companion-screen .settings-panel .background-controls {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  gap: 7px !important;
+}
+
+html body .companion-screen .settings-panel .background-controls button,
+html body .companion-screen .settings-panel .background-controls button:first-child {
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 38px !important;
+  padding: 0 10px !important;
+  background: rgba(255, 255, 255, 0.055) !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  font-size: 0.7rem !important;
+  font-weight: 700 !important;
+}
+
 @media (max-width: 620px) {
   html body .companion-screen .settings-panel {
     border-radius: 17px !important;
