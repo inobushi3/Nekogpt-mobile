@@ -36,6 +36,16 @@ html body .companion-screen .settings-panel b {
   color: #ffffff !important;
 }
 
+/* Remove the two live status dots without touching the section content. */
+html body .companion-screen .settings-panel .settings-panel__header > i {
+  display: none !important;
+}
+
+/* Hide only the background status text (e.g. "Imagem ativa" / "Preto padrão"). */
+html body .companion-screen .settings-panel .settings-section:nth-of-type(2) .settings-panel__header span {
+  display: none !important;
+}
+
 html body .companion-screen .settings-panel .background-controls {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
   gap: 7px !important;
